@@ -1,0 +1,33 @@
+import type { Metadata } from "next";
+
+import { requireSession } from "@/features/auth/session";
+import { ForbiddenError } from "@/lib/errors";
+import { canManageEmployees } from "@/features/employees/authorization";
+import { getEmployeeFormOptions } from "@/features/employees/lib/form-options";
+import { EmployeeForm } from "@/features/employees/components/employee-form";
+
+export const metadata: Metadata = { title: "Add Employee | EMS" };
+
+export default async function NewEmployeePage() {
+  const session = await requireSession();
+  if (!canManageEmployees(session.role)) throw new ForbiddenError();
+
+  const { departments, designations, managers, verticals } = await getEmployeeFormOptions();
+
+  return (
+    <div className="flex flex-1 flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Add Employee</h1>
+        <p className="text-sm text-muted-foreground">Create a new employee profile.</p>
+      </div>
+
+      <EmployeeForm
+        mode="create"
+        departments={departments.map((d) => ({ id: d.id, label: d.name }))}
+        designations={designations.map((d) => ({ id: d.id, label: d.title, departmentId: d.departmentId }))}
+        managers={managers.map((m) => ({ id: m.id, label: `${m.firstName} ${m.lastName}` }))}
+        verticals={verticals.map((v) => ({ id: v.id, label: v.name }))}
+      />
+    </div>
+  );
+}
