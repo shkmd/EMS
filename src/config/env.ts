@@ -12,7 +12,12 @@ const envSchema = z.object({
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().default(587),
-  SMTP_SECURE: z.coerce.boolean().default(false),
+  // z.coerce.boolean() would coerce the literal string "false" to `true`
+  // (any non-empty string is JS-truthy) — compare explicitly instead.
+  SMTP_SECURE: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_NAME: z.string().default("EMS"),
