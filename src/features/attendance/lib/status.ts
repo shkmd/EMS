@@ -6,6 +6,26 @@ export const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
   WORK_FROM_HOME: "WFH",
   HOLIDAY: "Holiday",
   WEEK_OFF: "Week Off",
+  OUTDOOR_DUTY: "Outdoor Duty",
+  COMPENSATORY_OFF: "Compensatory Off",
+  PERMISSION: "Permission",
+  WORK_ON_HOLIDAY: "Work On Holiday",
+}
+
+// Short codes for compact display (calendar cells, legend) — mirrors the
+// abbreviations HR already uses on their own attendance sheets.
+export const ATTENDANCE_STATUS_CODE: Record<string, string> = {
+  PRESENT: "P",
+  ABSENT: "A",
+  HALF_DAY: "HD",
+  LEAVE: "L",
+  WORK_FROM_HOME: "WFH",
+  HOLIDAY: "H",
+  WEEK_OFF: "WO",
+  OUTDOOR_DUTY: "OD",
+  COMPENSATORY_OFF: "CO",
+  PERMISSION: "PR",
+  WORK_ON_HOLIDAY: "WOH",
 }
 
 // Fixed status -> Tailwind classes, so a status keeps its color regardless
@@ -22,6 +42,10 @@ export const ATTENDANCE_STATUS_DOT: Record<string, string> = {
   LEAVE: "bg-violet-500",
   HOLIDAY: "bg-teal-500",
   WEEK_OFF: "bg-muted-foreground/40",
+  OUTDOOR_DUTY: "bg-cyan-500",
+  COMPENSATORY_OFF: "bg-orange-500",
+  PERMISSION: "bg-pink-500",
+  WORK_ON_HOLIDAY: "bg-indigo-500",
 }
 
 export const ATTENDANCE_STATUS_BADGE: Record<string, string> = {
@@ -32,4 +56,8 @@ export const ATTENDANCE_STATUS_BADGE: Record<string, string> = {
   LEAVE: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   HOLIDAY: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   WEEK_OFF: "bg-muted text-muted-foreground",
+  OUTDOOR_DUTY: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
+  COMPENSATORY_OFF: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  PERMISSION: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
+  WORK_ON_HOLIDAY: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
 }

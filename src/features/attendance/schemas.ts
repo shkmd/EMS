@@ -23,6 +23,10 @@ export const attendanceStatusValues = [
   "WORK_FROM_HOME",
   "HOLIDAY",
   "WEEK_OFF",
+  "OUTDOOR_DUTY",
+  "COMPENSATORY_OFF",
+  "PERMISSION",
+  "WORK_ON_HOLIDAY",
 ] as const
 
 export const manualAttendanceSchema = z.object({

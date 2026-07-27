@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/tooltip"
 import { apiFetch } from "@/lib/api-client"
 import { ATTENDANCE_STATUS_DOT, ATTENDANCE_STATUS_LABELS } from "@/features/attendance/lib/status"
+import { AttendanceStatusLegend } from "@/features/attendance/components/attendance-status-legend"
 
 type AttendanceRecord = { date: string; status: string; workingMinutes: number }
 type HolidayRecord = { date: string; name: string; type: string }
@@ -151,6 +152,9 @@ export function AttendanceCalendar({ employeeId }: { employeeId?: string }) {
             })}
           </div>
         )}
+        <div className="mt-4">
+          <AttendanceStatusLegend />
+        </div>
       </CardContent>
     </Card>
   )

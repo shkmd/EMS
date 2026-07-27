@@ -33,7 +33,7 @@ export async function getAttendanceToday() {
     prisma.attendance.count({
       where: {
         date: { gte: start, lte: end },
-        status: { in: ["PRESENT", "WORK_FROM_HOME", "HALF_DAY"] },
+        status: { in: ["PRESENT", "WORK_FROM_HOME", "HALF_DAY", "OUTDOOR_DUTY", "PERMISSION", "WORK_ON_HOLIDAY"] },
         employee: { deletedAt: null },
       },
     }),
