@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { TaskCard } from "@/features/projects/components/task-card"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
+import { TaskDetailSheet } from "@/features/projects/components/task-detail-sheet"
 import { TASK_STATUS_BADGE, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "@/features/projects/lib/labels"
 import type { AssigneeRef, TaskItem } from "@/features/projects/lib/types"
 
@@ -75,7 +76,14 @@ export function TaskBoardView({
   const [tasks, setTasks] = useState(initialTasks)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  function openDetail(task: TaskItem) {
+    setDetailTarget(task)
+    setDetailOpen(true)
+  }
 
   const columns = TASK_STATUS_ORDER.map((status) => ({
     status,
@@ -96,7 +104,13 @@ export function TaskBoardView({
 
   async function refresh() {
     const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) setTasks(result.data.tasks)
+    if (result.success) {
+      setTasks(result.data.tasks)
+      if (detailTarget) {
+        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
+        if (updated) setDetailTarget(updated)
+      }
+    }
   }
 
   async function handleStatusChange(task: TaskItem, status: string) {
@@ -167,14 +181,7 @@ export function TaskBoardView({
               <Column key={col.status} status={col.status} count={col.tasks.length}>
                 <SortableContext items={col.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   {col.tasks.map((task) => (
-                    <SortableCard
-                      key={task.id}
-                      task={task}
-                      onClick={() => {
-                        setEditTarget(task)
-                        setDialogOpen(true)
-                      }}
-                    />
+                    <SortableCard key={task.id} task={task} onClick={() => openDetail(task)} />
                   ))}
                 </SortableContext>
               </Column>
@@ -193,6 +200,7 @@ export function TaskBoardView({
                     task={task}
                     canChangeStatus={isMine}
                     onStatusChange={isMine ? (status) => handleStatusChange(task, status) : undefined}
+                    onClick={() => openDetail(task)}
                   />
                 )
               })}
@@ -208,6 +216,17 @@ export function TaskBoardView({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSaved={refresh}
+      />
+
+      <TaskDetailSheet
+        projectId={projectId}
+        task={detailTarget}
+        assignableEmployees={assignableEmployees}
+        canManage={canManage}
+        currentEmployeeId={currentEmployeeId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onTaskSaved={refresh}
       />
     </div>
   )

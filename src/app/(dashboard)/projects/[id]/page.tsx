@@ -13,8 +13,15 @@ import { TaskGanttView } from "@/features/projects/components/task-gantt-view";
 
 export const metadata: Metadata = { title: "Project | EMS" };
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ task?: string }>;
+}) {
   const { id } = await params;
+  const { task: openTaskId } = await searchParams;
   const session = await requireSession();
   const canManage = canManageProjects(session.role);
 
@@ -59,6 +66,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             assignableEmployees={employees}
             canManage={canManage}
             currentEmployeeId={session.employeeId}
+            initialOpenTaskId={openTaskId}
           />
         </TabsContent>
         <TabsContent value="board">
@@ -76,6 +84,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             initialTasks={tasks}
             assignableEmployees={employees}
             canManage={canManage}
+            currentEmployeeId={session.employeeId}
           />
         </TabsContent>
       </Tabs>

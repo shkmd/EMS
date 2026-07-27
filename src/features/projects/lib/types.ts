@@ -30,3 +30,14 @@ export type TaskItem = {
   updatedAt: string
   assignees: AssigneeRef[]
 }
+
+export type TaskParticipantRef = {
+  id: string
+  name: string
+  profilePhotoUrl: string | null
+  employeeId: string | null
+}
+
+export type TaskFeedItem =
+  | { kind: "comment"; id: string; createdAt: string; body: string; author: TaskParticipantRef }
+  | { kind: "activity"; id: string; createdAt: string; message: string; actor: TaskParticipantRef }

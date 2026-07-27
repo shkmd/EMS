@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { initials } from "@/features/messaging/lib/initials"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
+import { TaskDetailSheet } from "@/features/projects/components/task-detail-sheet"
 import { TASK_STATUS_BAR } from "@/features/projects/lib/labels"
 import type { AssigneeRef, TaskItem } from "@/features/projects/lib/types"
 
@@ -38,19 +39,34 @@ export function TaskGanttView({
   initialTasks,
   assignableEmployees,
   canManage,
+  currentEmployeeId,
 }: {
   projectId: string
   initialTasks: TaskItem[]
   assignableEmployees: AssigneeRef[]
   canManage: boolean
+  currentEmployeeId: string | null
 }) {
   const [tasks, setTasks] = useState(initialTasks)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  function openDetail(task: TaskItem) {
+    setDetailTarget(task)
+    setDetailOpen(true)
+  }
 
   async function refresh() {
     const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) setTasks(result.data.tasks)
+    if (result.success) {
+      setTasks(result.data.tasks)
+      if (detailTarget) {
+        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
+        if (updated) setDetailTarget(updated)
+      }
+    }
   }
 
   const scheduled = tasks
@@ -177,18 +193,10 @@ export function TaskGanttView({
                       }}
                       title={`${task.title} (${format(start, "MMM d")} – ${format(end, "MMM d")})`}
                       className={cn(
-                        "absolute flex items-center rounded-md px-2 text-xs font-medium",
-                        TASK_STATUS_BAR[task.status],
-                        canManage && "cursor-pointer"
+                        "absolute flex cursor-pointer items-center rounded-md px-2 text-xs font-medium",
+                        TASK_STATUS_BAR[task.status]
                       )}
-                      onClick={
-                        canManage
-                          ? () => {
-                              setEditTarget(task)
-                              setDialogOpen(true)
-                            }
-                          : undefined
-                      }
+                      onClick={() => openDetail(task)}
                     >
                       <span className="truncate">{task.title}</span>
                     </div>
@@ -210,18 +218,10 @@ export function TaskGanttView({
               <div
                 key={task.id}
                 className={cn(
-                  "flex items-center justify-between px-3 py-2 text-sm",
-                  idx > 0 && "border-t",
-                  canManage && "cursor-pointer hover:bg-accent/30"
+                  "flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-accent/30",
+                  idx > 0 && "border-t"
                 )}
-                onClick={
-                  canManage
-                    ? () => {
-                        setEditTarget(task)
-                        setDialogOpen(true)
-                      }
-                    : undefined
-                }
+                onClick={() => openDetail(task)}
               >
                 <span className="truncate">{task.title}</span>
                 <div className="flex -space-x-2">
@@ -245,6 +245,17 @@ export function TaskGanttView({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSaved={refresh}
+      />
+
+      <TaskDetailSheet
+        projectId={projectId}
+        task={detailTarget}
+        assignableEmployees={assignableEmployees}
+        canManage={canManage}
+        currentEmployeeId={currentEmployeeId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onTaskSaved={refresh}
       />
     </div>
   )

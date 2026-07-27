@@ -40,3 +40,8 @@ export const reorderTasksSchema = z.object({
   orderedTaskIds: z.array(z.string()).min(1),
 })
 export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>
+
+export const taskCommentSchema = z.object({
+  body: z.string().min(1, "Comment can't be empty").max(4000),
+})
+export type TaskCommentInput = z.infer<typeof taskCommentSchema>

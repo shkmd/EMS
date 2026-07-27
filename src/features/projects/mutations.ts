@@ -1,22 +1,70 @@
 import "server-only"
 
+import { format } from "date-fns"
+
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageProjects, isTaskAssignee } from "@/features/projects/authorization"
+import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/features/projects/lib/labels"
 import type {
   ProjectFormInput,
   ProjectStatusUpdateInput,
   TaskFormInput,
   TaskStatusUpdateInput,
   ReorderTasksInput,
+  TaskCommentInput,
 } from "@/features/projects/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
 function assertCanManage(viewer: AccessTokenPayload) {
   if (!canManageProjects(viewer.role)) throw new ForbiddenError()
+}
+
+// ---------- Notifications & activity log ----------
+
+async function logActivity(taskId: string, actorId: string, message: string) {
+  await prisma.taskActivity.create({ data: { taskId, actorId, message } })
+}
+
+/** The people who should hear about a task's activity: its assignees plus whoever created it. */
+async function getTaskNotificationRecipients(task: { createdById: string; assignees: { employeeId: string }[] }) {
+  const assigneeEmployeeIds = task.assignees.map((a) => a.employeeId)
+  const [assigneeEmployees, creator] = await Promise.all([
+    assigneeEmployeeIds.length > 0
+      ? prisma.employee.findMany({ where: { id: { in: assigneeEmployeeIds } }, select: { id: true, userId: true } })
+      : Promise.resolve([]),
+    prisma.user.findUnique({ where: { id: task.createdById }, select: { id: true, employee: { select: { id: true } } } }),
+  ])
+
+  const recipients = new Map<string, string | null>()
+  for (const e of assigneeEmployees) {
+    if (e.userId) recipients.set(e.userId, e.id)
+  }
+  if (creator) recipients.set(creator.id, creator.employee?.id ?? null)
+  return recipients
+}
+
+async function notifyTaskParticipants(
+  task: { id: string; projectId: string; title: string; createdById: string; assignees: { employeeId: string }[] },
+  actorUserId: string,
+  title: string,
+  message: string
+) {
+  const recipients = await getTaskNotificationRecipients(task)
+  recipients.delete(actorUserId)
+  if (recipients.size === 0) return
+
+  const link = `/projects/${task.projectId}?task=${task.id}`
+  await Promise.all(
+    Array.from(recipients.entries()).map(([userId, employeeId]) =>
+      prisma.notification
+        .create({ data: { userId, employeeId, type: "INFO", title, message, link } })
+        .catch((error) => console.error("Failed to create task notification:", error))
+    )
+  )
 }
 
 // ---------- Projects ----------
@@ -118,15 +166,50 @@ export async function createTask(projectId: string, input: TaskFormInput, viewer
   })
 
   await recordAuditLog({ userId: viewer.sub, action: "TASK_CREATED", entityType: "Task", entityId: task.id, ...meta })
+  await logActivity(task.id, viewer.sub, "created this task")
+
+  if (input.assigneeIds.length > 0) {
+    await notifyTaskParticipants(
+      { ...task, assignees: input.assigneeIds.map((employeeId) => ({ employeeId })) },
+      viewer.sub,
+      "New task assigned",
+      `You were assigned to "${task.title}"`
+    )
+  }
+
   return task
 }
 
 export async function updateTask(id: string, input: TaskFormInput, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManage(viewer)
 
-  const existing = await prisma.task.findUnique({ where: { id } })
+  const existing = await prisma.task.findUnique({
+    where: { id },
+    include: { assignees: { select: { employeeId: true } } },
+  })
   if (!existing) throw new NotFoundError("Task not found")
   await assertValidAssignees(input.assigneeIds)
+
+  const changes: string[] = []
+  if (existing.status !== input.status) {
+    changes.push(`changed status from ${TASK_STATUS_LABEL[existing.status]} to ${TASK_STATUS_LABEL[input.status]}`)
+  }
+  if (existing.priority !== input.priority) {
+    changes.push(`changed priority from ${TASK_PRIORITY_LABEL[existing.priority]} to ${TASK_PRIORITY_LABEL[input.priority]}`)
+  }
+  const newStartDate = input.startDate ? new Date(input.startDate) : null
+  if ((existing.startDate?.getTime() ?? null) !== (newStartDate?.getTime() ?? null)) {
+    changes.push(newStartDate ? `set the start date to ${format(newStartDate, "MMM d, yyyy")}` : "removed the start date")
+  }
+  const newDueDate = input.dueDate ? new Date(input.dueDate) : null
+  if ((existing.dueDate?.getTime() ?? null) !== (newDueDate?.getTime() ?? null)) {
+    changes.push(newDueDate ? `set the due date to ${format(newDueDate, "MMM d, yyyy")}` : "removed the due date")
+  }
+  const existingAssigneeIds = new Set(existing.assignees.map((a) => a.employeeId))
+  const newAssigneeIds = new Set(input.assigneeIds)
+  const assigneesChanged =
+    existingAssigneeIds.size !== newAssigneeIds.size || [...existingAssigneeIds].some((id) => !newAssigneeIds.has(id))
+  if (assigneesChanged) changes.push("updated the assignees")
 
   const task = await prisma.$transaction(async (tx) => {
     await tx.taskAssignee.deleteMany({ where: { taskId: id } })
@@ -137,14 +220,25 @@ export async function updateTask(id: string, input: TaskFormInput, viewer: Acces
         description: input.description || null,
         status: input.status,
         priority: input.priority,
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        startDate: newStartDate,
+        dueDate: newDueDate,
         assignees: { create: input.assigneeIds.map((employeeId) => ({ employeeId })) },
       },
     })
   })
 
   await recordAuditLog({ userId: viewer.sub, action: "TASK_UPDATED", entityType: "Task", entityId: id, ...meta })
+
+  if (changes.length > 0) {
+    await Promise.all(changes.map((message) => logActivity(id, viewer.sub, message)))
+    await notifyTaskParticipants(
+      { ...task, assignees: input.assigneeIds.map((employeeId) => ({ employeeId })) },
+      viewer.sub,
+      "Task updated",
+      `"${task.title}" was updated: ${changes.join(", ")}`
+    )
+  }
+
   return task
 }
 
@@ -160,6 +254,13 @@ export async function updateTaskStatus(id: string, input: TaskStatusUpdateInput,
   const task = await prisma.task.update({ where: { id }, data: { status: input.status } })
 
   await recordAuditLog({ userId: viewer.sub, action: "TASK_STATUS_UPDATED", entityType: "Task", entityId: id, ...meta })
+
+  if (existing.status !== input.status) {
+    const message = `changed status from ${TASK_STATUS_LABEL[existing.status]} to ${TASK_STATUS_LABEL[input.status]}`
+    await logActivity(id, viewer.sub, message)
+    await notifyTaskParticipants({ ...task, assignees: existing.assignees }, viewer.sub, "Task status changed", `"${task.title}" ${message}`)
+  }
+
   return task
 }
 
@@ -169,7 +270,7 @@ export async function reorderTasks(projectId: string, input: ReorderTasksInput, 
 
   const tasks = await prisma.task.findMany({
     where: { id: { in: input.orderedTaskIds }, projectId },
-    select: { id: true },
+    include: { assignees: { select: { employeeId: true } } },
   })
   if (tasks.length !== input.orderedTaskIds.length) throw new ValidationError("One or more tasks are invalid")
 
@@ -186,6 +287,15 @@ export async function reorderTasks(projectId: string, input: ReorderTasksInput, 
     entityId: projectId,
     ...meta,
   })
+
+  const moved = tasks.filter((t) => t.status !== input.status)
+  await Promise.all(
+    moved.map(async (task) => {
+      const message = `changed status from ${TASK_STATUS_LABEL[task.status]} to ${TASK_STATUS_LABEL[input.status]}`
+      await logActivity(task.id, viewer.sub, message)
+      await notifyTaskParticipants(task, viewer.sub, "Task status changed", `"${task.title}" ${message}`)
+    })
+  )
 }
 
 export async function deleteTask(id: string, viewer: AccessTokenPayload, meta: Meta) {
@@ -196,4 +306,23 @@ export async function deleteTask(id: string, viewer: AccessTokenPayload, meta: M
 
   await prisma.task.delete({ where: { id } })
   await recordAuditLog({ userId: viewer.sub, action: "TASK_DELETED", entityType: "Task", entityId: id, ...meta })
+}
+
+// ---------- Comments ----------
+
+export async function addTaskComment(taskId: string, input: TaskCommentInput, viewer: AccessTokenPayload) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { assignees: { select: { employeeId: true } } },
+  })
+  if (!task) throw new NotFoundError("Task not found")
+
+  const comment = await prisma.taskComment.create({
+    data: { taskId, authorId: viewer.sub, body: input.body },
+  })
+
+  const preview = input.body.length > 120 ? `${input.body.slice(0, 120)}…` : input.body
+  await notifyTaskParticipants(task, viewer.sub, "New comment", `New comment on "${task.title}": ${preview}`)
+
+  return comment
 }

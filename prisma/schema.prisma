@@ -229,6 +229,8 @@ model User {
   messagesSent        Message[]
   projectsCreated     Project[]             @relation("ProjectCreatedBy")
   tasksCreated        Task[]                @relation("TaskCreatedBy")
+  taskComments        TaskComment[]
+  taskActivities      TaskActivity[]
 
   @@index([role])
   @@map("users")
@@ -905,9 +907,11 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  assignees TaskAssignee[]
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  assignees  TaskAssignee[]
+  comments   TaskComment[]
+  activities TaskActivity[]
 
   @@index([projectId, status])
   @@map("tasks")
@@ -925,6 +929,39 @@ model TaskAssignee {
   @@unique([taskId, employeeId])
   @@index([employeeId])
   @@map("task_assignees")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("task_comments")
+}
+
+// A precomputed human-readable log of field changes (status, assignees,
+// dates, priority) — deliberately a plain message string, not a typed enum
+// of change kinds, mirroring AuditLog's free-form `action` string elsewhere
+// in this app rather than inventing a rigid taxonomy up front.
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String
+  message   String
+  createdAt DateTime @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("task_activities")
 }
 
 // ============================================================================

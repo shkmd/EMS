@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format, isBefore, startOfToday } from "date-fns"
 import { toast } from "sonner"
 import { MoreHorizontal, Plus } from "lucide-react"
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { initials } from "@/features/messaging/lib/initials"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
+import { TaskDetailSheet } from "@/features/projects/components/task-detail-sheet"
 import {
   TASK_PRIORITY_BADGE,
   TASK_PRIORITY_LABEL,
@@ -44,23 +45,43 @@ export function TaskListView({
   assignableEmployees,
   canManage,
   currentEmployeeId,
+  initialOpenTaskId,
 }: {
   projectId: string
   initialTasks: TaskItem[]
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
+  initialOpenTaskId?: string
 }) {
   const [tasks, setTasks] = useState(initialTasks)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TaskItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
   const today = startOfToday()
+
+  useEffect(() => {
+    if (!initialOpenTaskId) return
+    const match = initialTasks.find((t) => t.id === initialOpenTaskId)
+    if (match) {
+      setDetailTarget(match)
+      setDetailOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function refresh() {
     const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) setTasks(result.data.tasks)
+    if (result.success) {
+      setTasks(result.data.tasks)
+      if (detailTarget) {
+        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
+        if (updated) setDetailTarget(updated)
+      }
+    }
   }
 
   function canChangeStatus(task: TaskItem) {
@@ -138,9 +159,15 @@ export function TaskListView({
                         "hover:bg-accent/30"
                       )}
                     >
-                      <div className="min-w-40 flex-1">
-                        <p className="truncate text-sm font-medium">{task.title}</p>
-                      </div>
+                      <button
+                        className="min-w-40 flex-1 cursor-pointer text-left"
+                        onClick={() => {
+                          setDetailTarget(task)
+                          setDetailOpen(true)
+                        }}
+                      >
+                        <p className="truncate text-sm font-medium hover:underline">{task.title}</p>
+                      </button>
 
                       <div className="flex -space-x-2">
                         {task.assignees.map((a) => (
@@ -214,6 +241,17 @@ export function TaskListView({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSaved={refresh}
+      />
+
+      <TaskDetailSheet
+        projectId={projectId}
+        task={detailTarget}
+        assignableEmployees={assignableEmployees}
+        canManage={canManage}
+        currentEmployeeId={currentEmployeeId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onTaskSaved={refresh}
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

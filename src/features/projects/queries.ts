@@ -2,6 +2,7 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { NotFoundError } from "@/lib/errors"
+import type { TaskFeedItem, TaskParticipantRef } from "@/features/projects/lib/types"
 
 const assigneeSelect = {
   employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
@@ -14,6 +15,27 @@ function toAssigneeRef(row: {
     id: row.employee.id,
     name: `${row.employee.firstName} ${row.employee.lastName}`,
     profilePhotoUrl: row.employee.profilePhotoUrl,
+  }
+}
+
+const participantSelect = {
+  id: true,
+  email: true,
+  employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+} satisfies Record<string, unknown>
+
+type ParticipantRow = {
+  id: string
+  email: string
+  employee: { id: string; firstName: string; lastName: string; profilePhotoUrl: string | null } | null
+}
+
+function toParticipantRef(user: ParticipantRow): TaskParticipantRef {
+  return {
+    id: user.id,
+    name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user.email.split("@")[0]!,
+    profilePhotoUrl: user.employee?.profilePhotoUrl ?? null,
+    employeeId: user.employee?.id ?? null,
   }
 }
 
@@ -95,6 +117,45 @@ export async function getTask(id: string) {
     updatedAt: task.updatedAt,
     assignees: task.assignees.map(toAssigneeRef),
   }
+}
+
+/** Comments and activity log entries for a task's detail panel, merged into one time-ordered feed. */
+export async function getTaskFeed(taskId: string): Promise<TaskFeedItem[]> {
+  const [comments, activities] = await Promise.all([
+    prisma.taskComment.findMany({
+      where: { taskId },
+      include: { author: { select: participantSelect } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.taskActivity.findMany({
+      where: { taskId },
+      include: { actor: { select: participantSelect } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ])
+
+  const feed: TaskFeedItem[] = [
+    ...comments.map(
+      (c): TaskFeedItem => ({
+        kind: "comment",
+        id: c.id,
+        createdAt: c.createdAt.toISOString(),
+        body: c.body,
+        author: toParticipantRef(c.author),
+      })
+    ),
+    ...activities.map(
+      (a): TaskFeedItem => ({
+        kind: "activity",
+        id: a.id,
+        createdAt: a.createdAt.toISOString(),
+        message: a.message,
+        actor: toParticipantRef(a.actor),
+      })
+    ),
+  ]
+
+  return feed.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 }
 
 /** Active employees selectable as task assignees. */
