@@ -134,7 +134,10 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
     try {
       const result =
         mode === "create"
-          ? await apiFetch<{ employee: { id: string } }>("/api/employees", { method: "POST", body: values })
+          ? await apiFetch<{ employee: { id: string }; portalAccessGranted: boolean }>("/api/employees", {
+              method: "POST",
+              body: values,
+            })
           : await apiFetch<{ employee: { id: string } }>(`/api/employees/${employeeId}`, {
               method: "PATCH",
               body: values,
@@ -145,7 +148,7 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
         return
       }
 
-      toast.success(mode === "create" ? "Employee created" : "Employee updated")
+      toast.success(mode === "create" ? (result.message ?? "Employee created") : "Employee updated")
       router.push(`/employees/${result.data.employee.id}`)
       router.refresh()
     } catch {

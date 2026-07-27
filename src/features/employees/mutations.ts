@@ -1,6 +1,6 @@
 import "server-only"
 
-import { Prisma, type Gender, type BloodGroup, type MaritalStatus } from "@prisma/client"
+import { Prisma, type Gender, type BloodGroup, type MaritalStatus, type Role } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { ConflictError, NotFoundError, ForbiddenError } from "@/lib/errors"
@@ -65,6 +65,46 @@ function toEmployeeData(input: EmployeeFormInput) {
   } satisfies Prisma.EmployeeUncheckedUpdateInput
 }
 
+/**
+ * Creates the User account for an employee's first-ever portal grant,
+ * emails their temporary credentials, and audit-logs it. Throws (P2002) if
+ * the work email is already tied to another account — callers decide
+ * whether that should be fatal (explicit grant) or best-effort (auto-grant
+ * on employee creation).
+ */
+async function grantPortalAccess(
+  employee: { id: string; email: string },
+  role: Role,
+  viewer: AccessTokenPayload,
+  meta: Meta
+) {
+  const temporaryPassword = generateTemporaryPassword()
+  const passwordHash = await hashPassword(temporaryPassword)
+
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { email: employee.email, password: passwordHash, role, mustChangePassword: true },
+    })
+    await tx.employee.update({ where: { id: employee.id }, data: { userId: user.id } })
+  })
+
+  try {
+    const loginUrl = `${getEnv().NEXT_PUBLIC_APP_URL}/login`
+    await sendMail({ to: employee.email, ...portalAccessGrantedEmailTemplate(loginUrl, employee.email, temporaryPassword) })
+  } catch (error) {
+    console.error("Failed to send portal access email:", error)
+  }
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "EMPLOYEE_PORTAL_ACCESS_GRANTED",
+    entityType: "Employee",
+    entityId: employee.id,
+    metadata: { role },
+    ...meta,
+  })
+}
+
 export async function createEmployee(input: EmployeeFormInput, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManageEmployees(viewer)
 
@@ -110,7 +150,19 @@ export async function createEmployee(input: EmployeeFormInput, viewer: AccessTok
       ...meta,
     })
 
-    return employee
+    // New hires get portal access immediately, at the EMPLOYEE role — this
+    // is best-effort and never fails employee creation itself (e.g. the
+    // work email might already be tied to another account); HR can still
+    // grant/fix access manually from the Account Access card either way.
+    let portalAccessGranted = false
+    try {
+      await grantPortalAccess(employee, "EMPLOYEE", viewer, meta)
+      portalAccessGranted = true
+    } catch (error) {
+      console.error("Failed to auto-grant portal access on employee creation:", error)
+    }
+
+    return { employee, portalAccessGranted }
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ConflictError("An employee with this work email already exists")
@@ -244,38 +296,14 @@ export async function updateEmployeeAccountAccess(
     return { hasAccess: true as const, isNew: false }
   }
 
-  const temporaryPassword = generateTemporaryPassword()
-  const passwordHash = await hashPassword(temporaryPassword)
-
   try {
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { email: employee.email, password: passwordHash, role, mustChangePassword: true },
-      })
-      await tx.employee.update({ where: { id }, data: { userId: user.id } })
-    })
+    await grantPortalAccess(employee, role, viewer, meta)
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ConflictError("An account with this email already exists")
     }
     throw error
   }
-
-  try {
-    const loginUrl = `${getEnv().NEXT_PUBLIC_APP_URL}/login`
-    await sendMail({ to: employee.email, ...portalAccessGrantedEmailTemplate(loginUrl, employee.email, temporaryPassword) })
-  } catch (error) {
-    console.error("Failed to send portal access email:", error)
-  }
-
-  await recordAuditLog({
-    userId: viewer.sub,
-    action: "EMPLOYEE_PORTAL_ACCESS_GRANTED",
-    entityType: "Employee",
-    entityId: id,
-    metadata: { role },
-    ...meta,
-  })
 
   return { hasAccess: true as const, isNew: true }
 }

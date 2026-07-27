@@ -30,8 +30,12 @@ export async function POST(req: NextRequest) {
     const body = employeeFormSchema.parse(await req.json())
     const meta = { ipAddress: getClientIp(req.headers), userAgent: req.headers.get("user-agent") }
 
-    const employee = await createEmployee(body, session, meta)
-    return apiSuccess({ employee }, "Employee created", 201)
+    const { employee, portalAccessGranted } = await createEmployee(body, session, meta)
+    return apiSuccess(
+      { employee, portalAccessGranted },
+      portalAccessGranted ? "Employee created and portal access email sent" : "Employee created",
+      201
+    )
   } catch (error) {
     return apiError(error)
   }
