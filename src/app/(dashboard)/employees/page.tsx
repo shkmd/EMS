@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { forbidden } from "next/navigation";
 
 import { requireSession } from "@/features/auth/session";
-import { ForbiddenError } from "@/lib/errors";
 import { canManageEmployees, canViewEmployeeList } from "@/features/employees/authorization";
 import { listEmployees } from "@/features/employees/queries";
 import { employeeListQuerySchema } from "@/features/employees/schemas";
@@ -14,7 +14,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function EmployeesPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSession();
-  if (!canViewEmployeeList(session.role)) throw new ForbiddenError();
+  if (!canViewEmployeeList(session.role)) forbidden();
 
   const rawParams = await searchParams;
   const query = employeeListQuerySchema.parse(rawParams);

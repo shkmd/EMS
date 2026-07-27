@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { forbidden } from "next/navigation";
 
 import { requireSession } from "@/features/auth/session";
-import { ForbiddenError } from "@/lib/errors";
 import { canManageEmployees } from "@/features/employees/authorization";
 import { getEmployeeDetail } from "@/features/employees/queries";
 import { getEmployeeFormOptions } from "@/features/employees/lib/form-options";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Edit Employee | EMS" };
 
 export default async function EditEmployeePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
-  if (!canManageEmployees(session.role)) throw new ForbiddenError();
+  if (!canManageEmployees(session.role)) forbidden();
 
   const { id } = await params;
   const [employee, { departments, designations, managers, verticals }] = await Promise.all([

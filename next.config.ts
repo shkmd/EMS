@@ -3,6 +3,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  // Lets page components call forbidden()/unauthorized() from
+  // next/navigation for role-gated pages, rendering a proper forbidden.tsx
+  // instead of throwing — thrown errors get their message redacted by
+  // Next in production, which meant every role check that did
+  // `throw new ForbiddenError()` showed generic "Server Components render"
+  // boilerplate instead of a real "you don't have access" message.
+  experimental: {
+    authInterrupts: true,
+  },
+
   async headers() {
     return [
       {

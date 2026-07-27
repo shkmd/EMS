@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { forbidden } from "next/navigation";
 import { Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireSession } from "@/features/auth/session";
+import { ForbiddenError } from "@/lib/errors";
 import { canManageEmployees } from "@/features/employees/authorization";
 import { getEmployeeDetail } from "@/features/employees/queries";
 import { EmployeeOverview } from "@/features/employees/components/employee-overview";
@@ -32,7 +34,14 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
   const { id } = await params;
-  const employee = await getEmployeeDetail(id, session);
+
+  let employee: Awaited<ReturnType<typeof getEmployeeDetail>>;
+  try {
+    employee = await getEmployeeDetail(id, session);
+  } catch (error) {
+    if (error instanceof ForbiddenError) forbidden();
+    throw error;
+  }
   const canManage = canManageEmployees(session.role);
   const canViewLeaveBalance = canViewTeamLeave(session.role);
   const leaveBalances = canViewLeaveBalance
