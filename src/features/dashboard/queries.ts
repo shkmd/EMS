@@ -21,7 +21,9 @@ export async function getEmployeeStats() {
 }
 
 export async function getPendingLeaveRequestsCount() {
-  return prisma.leaveRequest.count({ where: { status: { in: ["PENDING", "MANAGER_APPROVED"] } } })
+  return prisma.leaveRequest.count({
+    where: { status: { in: ["PENDING", "MANAGER_APPROVED"] }, employee: { deletedAt: null } },
+  })
 }
 
 export async function getAttendanceToday() {
@@ -29,7 +31,11 @@ export async function getAttendanceToday() {
 
   const [present, totalActive] = await Promise.all([
     prisma.attendance.count({
-      where: { date: { gte: start, lte: end }, status: { in: ["PRESENT", "WORK_FROM_HOME", "HALF_DAY"] } },
+      where: {
+        date: { gte: start, lte: end },
+        status: { in: ["PRESENT", "WORK_FROM_HOME", "HALF_DAY"] },
+        employee: { deletedAt: null },
+      },
     }),
     prisma.employee.count({ where: { deletedAt: null, status: "ACTIVE" } }),
   ])
@@ -121,7 +127,7 @@ export async function getAttendanceStatistics(daysBack = 14) {
 
   const grouped = await prisma.attendance.groupBy({
     by: ["status"],
-    where: { date: { gte: since } },
+    where: { date: { gte: since }, employee: { deletedAt: null } },
     _count: { _all: true },
   })
 
@@ -133,6 +139,7 @@ export async function getAttendanceStatistics(daysBack = 14) {
 export async function getLeaveStatistics() {
   const grouped = await prisma.leaveRequest.groupBy({
     by: ["leaveTypeId"],
+    where: { employee: { deletedAt: null } },
     _count: { _all: true },
   })
 
