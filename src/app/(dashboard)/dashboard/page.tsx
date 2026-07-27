@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Users, UserCheck, UserX, UserPlus, Building2, CalendarClock, Clock, Cake, PartyPopper } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { requireSession } from "@/features/auth/session";
+import { canManageEmployees } from "@/features/employees/authorization";
 import { StatCard } from "@/features/dashboard/components/stat-card";
+import { VerticalFilter } from "@/features/dashboard/components/vertical-filter";
 import { EmployeeGrowthChart } from "@/features/dashboard/components/employee-growth-chart";
 import { DepartmentChart } from "@/features/dashboard/components/department-chart";
 import { AttendanceChart } from "@/features/dashboard/components/attendance-chart";
@@ -18,12 +21,29 @@ import {
   getDepartmentWiseEmployeeCounts,
   getAttendanceStatistics,
   getLeaveStatistics,
+  getEmployeeVerticalId,
+  listVerticals,
 } from "@/features/dashboard/queries";
 
 export const metadata: Metadata = { title: "Dashboard | EMS" };
 
-export default async function DashboardPage() {
-  await requireSession();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vertical?: string }>;
+}) {
+  const session = await requireSession();
+  const { vertical: requestedVerticalId } = await searchParams;
+  const canSwitchVertical = canManageEmployees(session.role);
+
+  const verticals = await listVerticals();
+
+  let verticalId: string | undefined;
+  if (canSwitchVertical) {
+    verticalId = requestedVerticalId && verticals.some((v) => v.id === requestedVerticalId) ? requestedVerticalId : undefined;
+  } else {
+    verticalId = session.employeeId ? (await getEmployeeVerticalId(session.employeeId)) ?? undefined : undefined;
+  }
 
   const [
     employeeStats,
@@ -36,22 +56,28 @@ export default async function DashboardPage() {
     attendanceStats,
     leaveStats,
   ] = await Promise.all([
-    getEmployeeStats(),
-    getPendingLeaveRequestsCount(),
-    getAttendanceToday(),
-    getBirthdaysThisMonth(),
-    getWorkAnniversariesThisMonth(),
-    getEmployeeGrowth(6),
-    getDepartmentWiseEmployeeCounts(),
-    getAttendanceStatistics(14),
-    getLeaveStatistics(),
+    getEmployeeStats(verticalId),
+    getPendingLeaveRequestsCount(verticalId),
+    getAttendanceToday(verticalId),
+    getBirthdaysThisMonth(verticalId),
+    getWorkAnniversariesThisMonth(verticalId),
+    getEmployeeGrowth(6, verticalId),
+    getDepartmentWiseEmployeeCounts(verticalId),
+    getAttendanceStatistics(14, verticalId),
+    getLeaveStatistics(verticalId),
   ]);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Company-wide overview.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Company-wide overview.</p>
+        </div>
+        {canSwitchVertical && verticals.length > 0 && <VerticalFilter verticals={verticals} />}
+        {!canSwitchVertical && verticalId && (
+          <Badge variant="secondary">Showing: {verticals.find((v) => v.id === verticalId)?.name}</Badge>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 xl:grid-cols-5">

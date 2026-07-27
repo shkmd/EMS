@@ -4,40 +4,63 @@ import { format } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
 import { utcDayRange, utcDateDaysAgo } from "@/lib/date-only"
+import { ATTENDANCE_STATUS_LABELS } from "@/features/attendance/lib/status"
 
-export async function getEmployeeStats() {
+export async function listVerticals() {
+  return prisma.vertical.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })
+}
+
+/** Resolves which vertical (if any) an employee belongs to — used to lock non-admin viewers to their own vertical. */
+export async function getEmployeeVerticalId(employeeId: string) {
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { verticalId: true } })
+  return employee?.verticalId ?? null
+}
+
+export async function getEmployeeStats(verticalId?: string) {
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1))
+  const verticalScope = verticalId ? { verticalId } : {}
 
   const [total, active, inactive, newThisMonth, departmentCount] = await Promise.all([
-    prisma.employee.count({ where: { deletedAt: null } }),
-    prisma.employee.count({ where: { deletedAt: null, status: "ACTIVE" } }),
-    prisma.employee.count({ where: { deletedAt: null, status: "INACTIVE" } }),
-    prisma.employee.count({ where: { deletedAt: null, dateOfJoining: { gte: monthStart } } }),
-    prisma.department.count(),
+    prisma.employee.count({ where: { deletedAt: null, ...verticalScope } }),
+    prisma.employee.count({ where: { deletedAt: null, status: "ACTIVE", ...verticalScope } }),
+    prisma.employee.count({ where: { deletedAt: null, status: "INACTIVE", ...verticalScope } }),
+    prisma.employee.count({ where: { deletedAt: null, dateOfJoining: { gte: monthStart }, ...verticalScope } }),
+    verticalId
+      ? prisma.department
+          .findMany({
+            where: { employees: { some: { deletedAt: null, verticalId } } },
+            select: { id: true },
+          })
+          .then((d) => d.length)
+      : prisma.department.count(),
   ])
 
   return { total, active, inactive, newThisMonth, departmentCount }
 }
 
-export async function getPendingLeaveRequestsCount() {
+export async function getPendingLeaveRequestsCount(verticalId?: string) {
   return prisma.leaveRequest.count({
-    where: { status: { in: ["PENDING", "MANAGER_APPROVED"] }, employee: { deletedAt: null } },
+    where: {
+      status: { in: ["PENDING", "MANAGER_APPROVED"] },
+      employee: { deletedAt: null, ...(verticalId ? { verticalId } : {}) },
+    },
   })
 }
 
-export async function getAttendanceToday() {
+export async function getAttendanceToday(verticalId?: string) {
   const { start, end } = utcDayRange()
+  const employeeScope = { deletedAt: null, ...(verticalId ? { verticalId } : {}) }
 
   const [present, totalActive] = await Promise.all([
     prisma.attendance.count({
       where: {
         date: { gte: start, lte: end },
         status: { in: ["PRESENT", "WORK_FROM_HOME", "HALF_DAY", "OUTDOOR_DUTY", "PERMISSION", "WORK_ON_HOLIDAY"] },
-        employee: { deletedAt: null },
+        employee: employeeScope,
       },
     }),
-    prisma.employee.count({ where: { deletedAt: null, status: "ACTIVE" } }),
+    prisma.employee.count({ where: { ...employeeScope, status: "ACTIVE" } }),
   ])
 
   return { present, totalActive }
@@ -52,10 +75,10 @@ export async function getAttendanceToday() {
 // not local ones, or the comparison silently disagrees near month/year
 // boundaries in non-UTC timezones (the same bug class as the attendance
 // check-in/out day-boundary issue — see src/lib/date-only.ts).
-export async function getBirthdaysThisMonth() {
+export async function getBirthdaysThisMonth(verticalId?: string) {
   const now = new Date()
   const employees = await prisma.employee.findMany({
-    where: { deletedAt: null, status: "ACTIVE", dob: { not: null } },
+    where: { deletedAt: null, status: "ACTIVE", dob: { not: null }, ...(verticalId ? { verticalId } : {}) },
     select: { id: true, firstName: true, lastName: true, dob: true, profilePhotoUrl: true },
   })
 
@@ -65,10 +88,10 @@ export async function getBirthdaysThisMonth() {
     .map((e) => ({ ...e, day: e.dob!.getUTCDate() }))
 }
 
-export async function getWorkAnniversariesThisMonth() {
+export async function getWorkAnniversariesThisMonth(verticalId?: string) {
   const now = new Date()
   const employees = await prisma.employee.findMany({
-    where: { deletedAt: null, status: "ACTIVE" },
+    where: { deletedAt: null, status: "ACTIVE", ...(verticalId ? { verticalId } : {}) },
     select: { id: true, firstName: true, lastName: true, dateOfJoining: true, profilePhotoUrl: true },
   })
 
@@ -84,9 +107,9 @@ export async function getWorkAnniversariesThisMonth() {
     .sort((a, b) => a.day - b.day)
 }
 
-export async function getEmployeeGrowth(monthsBack = 6) {
+export async function getEmployeeGrowth(monthsBack = 6, verticalId?: string) {
   const employees = await prisma.employee.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, ...(verticalId ? { verticalId } : {}) },
     select: { dateOfJoining: true },
   })
 
@@ -103,31 +126,26 @@ export async function getEmployeeGrowth(monthsBack = 6) {
   return buckets
 }
 
-export async function getDepartmentWiseEmployeeCounts() {
+export async function getDepartmentWiseEmployeeCounts(verticalId?: string) {
   const departments = await prisma.department.findMany({
-    select: { name: true, _count: { select: { employees: { where: { deletedAt: null } } } } },
+    select: {
+      name: true,
+      _count: { select: { employees: { where: { deletedAt: null, ...(verticalId ? { verticalId } : {}) } } } },
+    },
     orderBy: { name: "asc" },
   })
 
-  return departments.map((d) => ({ department: d.name, count: d._count.employees }))
+  return departments
+    .map((d) => ({ department: d.name, count: d._count.employees }))
+    .filter((d) => d.count > 0 || !verticalId)
 }
 
-const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
-  PRESENT: "Present",
-  ABSENT: "Absent",
-  HALF_DAY: "Half Day",
-  LEAVE: "Leave",
-  WORK_FROM_HOME: "Work From Home",
-  HOLIDAY: "Holiday",
-  WEEK_OFF: "Week Off",
-}
-
-export async function getAttendanceStatistics(daysBack = 14) {
+export async function getAttendanceStatistics(daysBack = 14, verticalId?: string) {
   const since = utcDateDaysAgo(daysBack)
 
   const grouped = await prisma.attendance.groupBy({
     by: ["status"],
-    where: { date: { gte: since }, employee: { deletedAt: null } },
+    where: { date: { gte: since }, employee: { deletedAt: null, ...(verticalId ? { verticalId } : {}) } },
     _count: { _all: true },
   })
 
@@ -136,10 +154,10 @@ export async function getAttendanceStatistics(daysBack = 14) {
     .sort((a, b) => b.count - a.count)
 }
 
-export async function getLeaveStatistics() {
+export async function getLeaveStatistics(verticalId?: string) {
   const grouped = await prisma.leaveRequest.groupBy({
     by: ["leaveTypeId"],
-    where: { employee: { deletedAt: null } },
+    where: { employee: { deletedAt: null, ...(verticalId ? { verticalId } : {}) } },
     _count: { _all: true },
   })
 
