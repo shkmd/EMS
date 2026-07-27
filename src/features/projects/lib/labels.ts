@@ -14,6 +14,14 @@ export const TASK_STATUS_BADGE: Record<string, string> = {
 
 export const TASK_STATUS_ORDER = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const
 
+/** Solid fills for the Gantt bars — needs more contrast than the light badge tints above. */
+export const TASK_STATUS_BAR: Record<string, string> = {
+  TODO: "bg-muted-foreground/50 text-white",
+  IN_PROGRESS: "bg-blue-500 text-white",
+  IN_REVIEW: "bg-amber-500 text-white",
+  DONE: "bg-emerald-500 text-white",
+}
+
 export const TASK_PRIORITY_LABEL: Record<string, string> = {
   LOW: "Low",
   MEDIUM: "Medium",

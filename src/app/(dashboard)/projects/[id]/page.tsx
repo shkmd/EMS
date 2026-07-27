@@ -9,6 +9,7 @@ import { canManageProjects } from "@/features/projects/authorization";
 import { getProject, listProjectTasks, listAssignableEmployees } from "@/features/projects/queries";
 import { TaskListView } from "@/features/projects/components/task-list-view";
 import { TaskBoardView } from "@/features/projects/components/task-board-view";
+import { TaskGanttView } from "@/features/projects/components/task-gantt-view";
 
 export const metadata: Metadata = { title: "Project | EMS" };
 
@@ -49,9 +50,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <TabsList>
           <TabsTrigger value="list">List</TabsTrigger>
           <TabsTrigger value="board">Board</TabsTrigger>
-          <TabsTrigger value="gantt" disabled>
-            Gantt <Badge variant="secondary">Soon</Badge>
-          </TabsTrigger>
+          <TabsTrigger value="gantt">Gantt</TabsTrigger>
         </TabsList>
         <TabsContent value="list">
           <TaskListView
@@ -69,6 +68,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             assignableEmployees={employees}
             canManage={canManage}
             currentEmployeeId={session.employeeId}
+          />
+        </TabsContent>
+        <TabsContent value="gantt">
+          <TaskGanttView
+            projectId={project.id}
+            initialTasks={tasks}
+            assignableEmployees={employees}
+            canManage={canManage}
           />
         </TabsContent>
       </Tabs>
