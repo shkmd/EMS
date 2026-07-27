@@ -16,6 +16,9 @@ import { EmployeeTimeline } from "@/features/employees/components/employee-timel
 import { EmployeePhotoUpload } from "@/features/employees/components/employee-photo-upload";
 import { PrintProfileButton } from "@/features/employees/components/print-profile-button";
 import { AccountAccessCard } from "@/features/employees/components/account-access-card";
+import { canViewTeamLeave } from "@/features/leave/authorization";
+import { getLeaveBalances } from "@/features/leave/queries";
+import { LeaveBalanceCards } from "@/features/leave/components/leave-balance-cards";
 
 export const metadata: Metadata = { title: "Employee Profile | EMS" };
 
@@ -31,6 +34,10 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   const { id } = await params;
   const employee = await getEmployeeDetail(id, session);
   const canManage = canManageEmployees(session.role);
+  const canViewLeaveBalance = canViewTeamLeave(session.role);
+  const leaveBalances = canViewLeaveBalance
+    ? await getLeaveBalances(employee.id, new Date().getFullYear())
+    : [];
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -75,6 +82,15 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
           user={employee.user}
           viewerCanGrantSuperAdmin={session.role === "SUPER_ADMIN"}
         />
+      )}
+
+      {canViewLeaveBalance && (
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <h2 className="text-sm font-medium">Leave Balance ({new Date().getFullYear()})</h2>
+            <LeaveBalanceCards balances={leaveBalances} />
+          </CardContent>
+        </Card>
       )}
 
       <Tabs defaultValue="overview">
