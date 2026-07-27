@@ -108,7 +108,7 @@ export function TaskDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex h-[85vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[85vh] w-[80vw] max-w-[80vw] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b p-4">
             <div className="flex items-start justify-between gap-2 pr-8">
               <DialogTitle className="text-xl">{task.title}</DialogTitle>
