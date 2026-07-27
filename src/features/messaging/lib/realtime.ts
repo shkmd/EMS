@@ -23,14 +23,19 @@ export type RealtimeMessageEvent = {
 // creates a message and any open SSE connections for its recipient. A
 // multi-instance deployment would need Redis (or similar) pub/sub instead —
 // revisit if this ever scales past one replica.
+//
+// The globalThis assignment must happen unconditionally, not just in dev.
+// Next.js compiles each Route Handler into its own bundle even in a
+// production build, so mutations.ts (used by the send-message route) and
+// stream/route.ts (the SSE route) each get their own separate evaluation of
+// this module — without a process-wide global to share, they'd end up with
+// two independent EventEmitters that never talk to each other (caught live:
+// messages sent successfully, but the recipient's SSE stream never fired).
 const globalForRealtime = globalThis as unknown as { messagingEmitter: EventEmitter | undefined }
 
 const emitter = globalForRealtime.messagingEmitter ?? new EventEmitter()
 emitter.setMaxListeners(0)
-
-if (process.env.NODE_ENV !== "production") {
-  globalForRealtime.messagingEmitter = emitter
-}
+globalForRealtime.messagingEmitter = emitter
 
 export function publishToEmployee(employeeId: string, event: RealtimeMessageEvent) {
   emitter.emit(`employee:${employeeId}`, event)
