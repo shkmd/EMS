@@ -181,6 +181,25 @@ enum NotificationType {
   ERROR
 }
 
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 // ============================================================================
 // Auth & Access Control
 // ============================================================================
@@ -208,6 +227,8 @@ model User {
   conversationsAsA    Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB    Conversation[]        @relation("ConversationParticipantB")
   messagesSent        Message[]
+  projectsCreated     Project[]             @relation("ProjectCreatedBy")
+  tasksCreated        Task[]                @relation("TaskCreatedBy")
 
   @@index([role])
   @@map("users")
@@ -390,6 +411,7 @@ model Employee {
   performanceReviews     PerformanceReview[]     @relation("RevieweeEmployee")
   assetAssignments       AssetAssignment[]
   notifications          Notification[]
+  taskAssignments        TaskAssignee[]
 
   @@index([departmentId])
   @@index([designationId])
@@ -844,6 +866,65 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// ============================================================================
+// Projects & Tasks
+// ============================================================================
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  color       String        @default("#6366f1")
+  status      ProjectStatus @default(ACTIVE)
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  createdBy User   @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  tasks     Task[]
+
+  @@index([createdById])
+  @@map("projects")
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  projectId   String
+  title       String
+  description String?      @db.Text
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  startDate   DateTime?
+  dueDate     DateTime?
+  // Manual ordering within a project/status column, used by the Board
+  // (drag-and-drop) view — assigned at creation, reassigned on reorder.
+  position    Int          @default(0)
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  assignees TaskAssignee[]
+
+  @@index([projectId, status])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id         String   @id @default(cuid())
+  taskId     String
+  employeeId String
+  assignedAt DateTime @default(now())
+
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, employeeId])
+  @@index([employeeId])
+  @@map("task_assignees")
 }
 
 // ============================================================================

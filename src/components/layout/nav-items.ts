@@ -16,6 +16,7 @@ import {
   History,
   Receipt,
   MessageSquare,
+  FolderKanban,
 } from "lucide-react"
 
 import type { Role } from "@prisma/client"
@@ -63,6 +64,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Expenses", href: "/expenses", icon: Receipt },
       { label: "Performance", href: "/performance", icon: Target },
     ],
+  },
+  {
+    label: "Projects",
+    items: [{ label: "Projects", href: "/projects", icon: FolderKanban }],
   },
   {
     label: "Resources",
