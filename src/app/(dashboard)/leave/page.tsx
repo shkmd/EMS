@@ -12,13 +12,24 @@ import { LeaveCalendar } from "@/features/leave/components/leave-calendar";
 
 export const metadata: Metadata = { title: "Leave | EMS" };
 
-export default async function LeavePage() {
+export default async function LeavePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await requireSession();
+  const { tab } = await searchParams;
   const isManager = session.role === "MANAGER";
   const isHr = canActAsHr(session.role);
   const showApprovalsTab = isManager || isHr;
   const hasEmployeeProfile = !!session.employeeId;
-  const defaultTab = hasEmployeeProfile ? "my" : showApprovalsTab ? "approvals" : "calendar";
+  const visibleTabs = [
+    ...(hasEmployeeProfile ? ["my"] : []),
+    ...(showApprovalsTab ? ["approvals"] : []),
+    "calendar",
+  ];
+  const defaultTab =
+    tab && visibleTabs.includes(tab) ? tab : hasEmployeeProfile ? "my" : showApprovalsTab ? "approvals" : "calendar";
 
   const [leaveTypes, balances, myRequests] = await Promise.all([
     listLeaveTypes(),

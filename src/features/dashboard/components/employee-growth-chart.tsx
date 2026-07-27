@@ -1,6 +1,6 @@
 "use client"
 
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -25,6 +25,7 @@ export function EmployeeGrowthChart({ data }: { data: { month: string; count: nu
             <AreaChart data={data} margin={{ left: 0, right: 12 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis hide allowDecimals={false} domain={[0, (max: number) => Math.max(max + 1, 1)]} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <defs>
                 <linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
@@ -38,7 +39,9 @@ export function EmployeeGrowthChart({ data }: { data: { month: string; count: nu
                 fill="url(#fillCount)"
                 stroke="var(--color-count)"
                 strokeWidth={2}
-              />
+              >
+                <LabelList dataKey="count" position="top" className="fill-foreground" fontSize={11} />
+              </Area>
             </AreaChart>
           </ChartContainer>
         ) : (

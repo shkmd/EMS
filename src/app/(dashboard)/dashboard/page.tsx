@@ -55,20 +55,51 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 xl:grid-cols-5">
-        <StatCard label="Total Employees" value={employeeStats.total} icon={Users} />
-        <StatCard label="Active" value={employeeStats.active} icon={UserCheck} accent="success" />
-        <StatCard label="Inactive" value={employeeStats.inactive} icon={UserX} accent="destructive" />
-        <StatCard label="New This Month" value={employeeStats.newThisMonth} icon={UserPlus} accent="warning" />
-        <StatCard label="Departments" value={employeeStats.departmentCount} icon={Building2} />
-        <StatCard label="Pending Leave Requests" value={pendingLeaveRequests} icon={CalendarClock} accent="warning" />
+        <StatCard label="Total Employees" value={employeeStats.total} icon={Users} href="/employees" />
+        <StatCard
+          label="Active"
+          value={employeeStats.active}
+          icon={UserCheck}
+          accent="success"
+          href="/employees?status=ACTIVE"
+        />
+        <StatCard
+          label="Inactive"
+          value={employeeStats.inactive}
+          icon={UserX}
+          accent="destructive"
+          href="/employees?status=INACTIVE"
+        />
+        <StatCard
+          label="New This Month"
+          value={employeeStats.newThisMonth}
+          icon={UserPlus}
+          accent="warning"
+          href="/employees?sortBy=dateOfJoining&sortOrder=desc"
+        />
+        <StatCard label="Departments" value={employeeStats.departmentCount} icon={Building2} href="/departments" />
+        <StatCard
+          label="Pending Leave Requests"
+          value={pendingLeaveRequests}
+          icon={CalendarClock}
+          accent="warning"
+          href="/leave?tab=approvals"
+        />
         <StatCard
           label="Attendance Today"
           value={`${attendanceToday.present} / ${attendanceToday.totalActive}`}
           icon={Clock}
           accent="success"
+          href="/attendance?tab=team"
         />
-        <StatCard label="Birthdays This Month" value={birthdays.length} icon={Cake} accent="info" />
-        <StatCard label="Work Anniversaries" value={anniversaries.length} icon={PartyPopper} accent="violet" />
+        <StatCard label="Birthdays This Month" value={birthdays.length} icon={Cake} accent="info" href="#celebrations" />
+        <StatCard
+          label="Work Anniversaries"
+          value={anniversaries.length}
+          icon={PartyPopper}
+          accent="violet"
+          href="#celebrations"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -78,7 +109,9 @@ export default async function DashboardPage() {
         <LeaveChart data={leaveStats} />
       </div>
 
-      <CelebrationsCard birthdays={birthdays} anniversaries={anniversaries} />
+      <div id="celebrations" className="scroll-mt-20">
+        <CelebrationsCard birthdays={birthdays} anniversaries={anniversaries} />
+      </div>
     </div>
   );
 }

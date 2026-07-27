@@ -12,12 +12,22 @@ import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Attendance | EMS" };
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await requireSession();
+  const { tab } = await searchParams;
   const showTeamTab = canViewTeamAttendance(session.role);
   const canManage = canManageAttendance(session.role);
   const hasEmployeeProfile = !!session.employeeId;
-  const defaultTab = hasEmployeeProfile ? "my" : showTeamTab ? "team" : "reports";
+  const visibleTabs = [
+    ...(hasEmployeeProfile ? ["my"] : []),
+    ...(showTeamTab ? ["team", "reports"] : []),
+  ];
+  const defaultTab =
+    tab && visibleTabs.includes(tab) ? tab : hasEmployeeProfile ? "my" : showTeamTab ? "team" : "reports";
 
   const [todayAttendance, departments, employees] = await Promise.all([
     session.employeeId ? getTodayAttendance(session.employeeId) : Promise.resolve(null),

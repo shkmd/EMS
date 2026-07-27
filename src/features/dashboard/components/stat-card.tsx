@@ -1,3 +1,4 @@
+import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
@@ -9,6 +10,7 @@ type StatCardProps = {
   icon: LucideIcon
   hint?: string
   accent?: "default" | "success" | "warning" | "destructive" | "info" | "violet"
+  href?: string
 }
 
 const ACCENT_CLASSES: Record<NonNullable<StatCardProps["accent"]>, string> = {
@@ -20,19 +22,27 @@ const ACCENT_CLASSES: Record<NonNullable<StatCardProps["accent"]>, string> = {
   violet: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
 }
 
-export function StatCard({ label, value, icon: Icon, hint, accent = "default" }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-3">
-        <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", ACCENT_CLASSES[accent])}>
-          <Icon className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="text-2xl font-semibold tabular-nums">{value}</p>
-          {hint && <p className="truncate text-xs text-muted-foreground/80">{hint}</p>}
-        </div>
-      </CardContent>
-    </Card>
+export function StatCard({ label, value, icon: Icon, hint, accent = "default", href }: StatCardProps) {
+  const content = (
+    <CardContent className="flex flex-col gap-3">
+      <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", ACCENT_CLASSES[accent])}>
+        <Icon className="size-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
+        <p className="text-2xl font-semibold tabular-nums">{value}</p>
+        {hint && <p className="truncate text-xs text-muted-foreground/80">{hint}</p>}
+      </div>
+    </CardContent>
   )
+
+  if (href) {
+    return (
+      <Link href={href} className="block">
+        <Card className="transition-colors hover:bg-accent/50">{content}</Card>
+      </Link>
+    )
+  }
+
+  return <Card>{content}</Card>
 }
