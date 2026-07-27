@@ -144,8 +144,29 @@ export async function updateLeaveType(id: string, input: LeaveTypeFormInput, vie
   const existing = await prisma.leaveType.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Leave type not found")
 
+  const data = toLeaveTypeData(input)
+
   try {
-    const leaveType = await prisma.leaveType.update({ where: { id }, data: toLeaveTypeData(input) })
+    const leaveType = await prisma.$transaction(async (tx) => {
+      const updated = await tx.leaveType.update({ where: { id }, data })
+
+      // LeaveBalance.allocated is only ever seeded once, at employee-
+      // creation time, from whatever defaultDaysPerYear was then — it's
+      // never re-read after that. Without this, changing a leave type's
+      // yearly allocation here would silently only apply to brand-new
+      // employees, leaving everyone else frozen at the old number. There's
+      // no per-employee custom-allocation feature to accidentally clobber,
+      // so it's safe to keep this year's already-seeded balances in sync.
+      if (existing.defaultDaysPerYear !== data.defaultDaysPerYear) {
+        await tx.leaveBalance.updateMany({
+          where: { leaveTypeId: id, year: new Date().getFullYear() },
+          data: { allocated: data.defaultDaysPerYear },
+        })
+      }
+
+      return updated
+    })
+
     await recordAuditLog({ userId: viewer.sub, action: "LEAVE_TYPE_UPDATED", entityType: "LeaveType", entityId: id, ...meta })
     return leaveType
   } catch (error) {
