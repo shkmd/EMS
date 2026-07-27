@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, type FieldErrors } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { apiFetch } from "@/lib/api-client"
 import { employeeFormSchema, type EmployeeFormInput } from "@/features/employees/schemas"
+import type { GeoOption } from "@/lib/geo"
 
 const NONE = "__none__"
 
@@ -88,6 +89,27 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
   const filteredDesignations = designations.filter(
     (d) => !selectedDepartmentId || d.departmentId === selectedDepartmentId
   )
+
+  const [countries, setCountries] = useState<GeoOption[]>([])
+  const [states, setStates] = useState<GeoOption[]>([])
+  const selectedCountryName = form.watch("country")
+
+  useEffect(() => {
+    apiFetch<{ countries: GeoOption[] }>("/api/geo/countries").then((result) => {
+      if (result.success) setCountries(result.data.countries)
+    })
+  }, [])
+
+  useEffect(() => {
+    const isoCode = countries.find((c) => c.name === selectedCountryName)?.isoCode
+    if (!isoCode) {
+      setStates([])
+      return
+    }
+    apiFetch<{ states: GeoOption[] }>(`/api/geo/states?country=${isoCode}`).then((result) => {
+      if (result.success) setStates(result.data.states)
+    })
+  }, [countries, selectedCountryName])
 
   const activeTabIndex = TAB_ORDER.indexOf(activeTab)
   const isFirstTab = activeTabIndex === 0
@@ -357,29 +379,65 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
                 />
                 <FormField
                   control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  name="country"
+                  render={({ field }) => {
+                    const hasKnownMatch = countries.some((c) => c.name === field.value)
+                    return (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={(v) => {
+                            field.onChange(v)
+                            form.setValue("state", "")
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select country" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {field.value && !hasKnownMatch && <SelectItem value={field.value}>{field.value}</SelectItem>}
+                            {countries.map((c) => (
+                              <SelectItem key={c.isoCode} value={c.name}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
                 />
                 <FormField
                   control={form.control}
-                  name="country"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  name="state"
+                  render={({ field }) => {
+                    const hasKnownMatch = states.some((s) => s.name === field.value)
+                    return (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <Select value={field.value || undefined} onValueChange={field.onChange} disabled={!selectedCountryName}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={selectedCountryName ? "Select state" : "Select a country first"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {field.value && !hasKnownMatch && <SelectItem value={field.value}>{field.value}</SelectItem>}
+                            {states.map((s) => (
+                              <SelectItem key={s.isoCode} value={s.name}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
                 />
                 <FormField
                   control={form.control}

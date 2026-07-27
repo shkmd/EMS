@@ -8,7 +8,6 @@ import {
   endOfWeek,
   format,
   isSameMonth,
-  isWithinInterval,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -58,7 +57,13 @@ export function LeaveCalendar() {
   }, [cursor])
 
   function entriesForDay(day: Date) {
-    return entries.filter((e) => isWithinInterval(day, { start: new Date(e.startDate), end: new Date(e.endDate) }))
+    // startDate/endDate are UTC-midnight-anchored calendar dates (@db.Date),
+    // not real instants — comparing them as timestamps against a locally
+    // constructed `day` breaks for single-day entries whenever the browser
+    // isn't in UTC (start === end is a zero-width interval). Compare the
+    // calendar-date strings instead.
+    const dayStr = format(day, "yyyy-MM-dd")
+    return entries.filter((e) => dayStr >= e.startDate.slice(0, 10) && dayStr <= e.endDate.slice(0, 10))
   }
 
   return (
