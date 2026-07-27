@@ -32,3 +32,11 @@ export const taskStatusUpdateSchema = z.object({
   status: z.enum(taskStatusValues),
 })
 export type TaskStatusUpdateInput = z.infer<typeof taskStatusUpdateSchema>
+
+// Manager-only Board (drag-and-drop) reordering: replaces the ordering (and,
+// for cross-column drops, the status) of every task in one destination column.
+export const reorderTasksSchema = z.object({
+  status: z.enum(taskStatusValues),
+  orderedTaskIds: z.array(z.string()).min(1),
+})
+export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>

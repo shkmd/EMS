@@ -10,6 +10,7 @@ import type {
   ProjectStatusUpdateInput,
   TaskFormInput,
   TaskStatusUpdateInput,
+  ReorderTasksInput,
 } from "@/features/projects/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
@@ -160,6 +161,31 @@ export async function updateTaskStatus(id: string, input: TaskStatusUpdateInput,
 
   await recordAuditLog({ userId: viewer.sub, action: "TASK_STATUS_UPDATED", entityType: "Task", entityId: id, ...meta })
   return task
+}
+
+/** Manager-only Board drag-and-drop: sets the ordering (and destination status) of every task in one column. */
+export async function reorderTasks(projectId: string, input: ReorderTasksInput, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  const tasks = await prisma.task.findMany({
+    where: { id: { in: input.orderedTaskIds }, projectId },
+    select: { id: true },
+  })
+  if (tasks.length !== input.orderedTaskIds.length) throw new ValidationError("One or more tasks are invalid")
+
+  await prisma.$transaction(
+    input.orderedTaskIds.map((taskId, index) =>
+      prisma.task.update({ where: { id: taskId }, data: { status: input.status, position: index } })
+    )
+  )
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "TASKS_REORDERED",
+    entityType: "Project",
+    entityId: projectId,
+    ...meta,
+  })
 }
 
 export async function deleteTask(id: string, viewer: AccessTokenPayload, meta: Meta) {
