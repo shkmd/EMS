@@ -9,11 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import type { EmployeeRef, MessageItem } from "@/features/messaging/lib/types"
-
-function initials(firstName: string, lastName: string) {
-  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase()
-}
+import { initials } from "@/features/messaging/lib/initials"
+import type { ParticipantRef, MessageItem } from "@/features/messaging/lib/types"
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
@@ -46,14 +43,14 @@ function AttachmentPreview({ message }: { message: MessageItem }) {
 export function MessageThread({
   other,
   messages,
-  currentEmployeeId,
+  currentUserId,
   isLoading,
   onSend,
   onBack,
 }: {
-  other: EmployeeRef | null
+  other: ParticipantRef | null
   messages: MessageItem[]
-  currentEmployeeId: string
+  currentUserId: string
   isLoading: boolean
   onSend: (body: string, file: File | null) => Promise<void>
   onBack: () => void
@@ -105,12 +102,10 @@ export function MessageThread({
           <ArrowLeft />
         </Button>
         <Avatar className="size-8">
-          {other.profilePhotoUrl && <AvatarImage src={`/api/employees/${other.id}/photo`} />}
-          <AvatarFallback className="text-xs">{initials(other.firstName, other.lastName)}</AvatarFallback>
+          {other.employeeId && <AvatarImage src={`/api/employees/${other.employeeId}/photo`} />}
+          <AvatarFallback className="text-xs">{initials(other.name)}</AvatarFallback>
         </Avatar>
-        <span className="text-sm font-medium">
-          {other.firstName} {other.lastName}
-        </span>
+        <span className="text-sm font-medium">{other.name}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -121,7 +116,7 @@ export function MessageThread({
         ) : (
           <div className="flex flex-col gap-3">
             {messages.map((m) => {
-              const isOwn = m.senderId === currentEmployeeId
+              const isOwn = m.senderId === currentUserId
               return (
                 <div key={m.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
                   <div className={cn("flex max-w-[75%] flex-col gap-1", isOwn && "items-end")}>

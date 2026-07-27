@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 
 import { requireSession } from "@/features/auth/session"
-import { subscribeToEmployee } from "@/features/messaging/lib/realtime"
+import { subscribeToUser } from "@/features/messaging/lib/realtime"
 
 // Long-lived streaming response — must opt out of any static/caching
 // behavior Next might otherwise apply to a route handler.
@@ -9,10 +9,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
   const session = await requireSession()
-  if (!session.employeeId) {
-    return new Response("Account isn't linked to an employee profile", { status: 400 })
-  }
-  const employeeId = session.employeeId
+  const userId = session.sub
 
   const encoder = new TextEncoder()
 
@@ -26,7 +23,7 @@ export async function GET(req: NextRequest) {
 
       controller.enqueue(encoder.encode(": connected\n\n"))
 
-      const unsubscribe = subscribeToEmployee(employeeId, send)
+      const unsubscribe = subscribeToUser(userId, send)
 
       // Keeps the connection alive through proxies/load balancers that
       // close idle connections after a timeout (Caddy's default is well

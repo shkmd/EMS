@@ -8,11 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api-client"
-import type { EmployeeRef } from "@/features/messaging/lib/types"
-
-function initials(firstName: string, lastName: string) {
-  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase()
-}
+import { initials } from "@/features/messaging/lib/initials"
+import type { ParticipantRef } from "@/features/messaging/lib/types"
 
 export function NewConversationDialog({
   open,
@@ -21,29 +18,27 @@ export function NewConversationDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelect: (employeeId: string) => void
+  onSelect: (userId: string) => void
 }) {
-  const [employees, setEmployees] = useState<EmployeeRef[] | null>(null)
+  const [users, setUsers] = useState<ParticipantRef[] | null>(null)
   const [search, setSearch] = useState("")
   const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setSearch("")
-    apiFetch<{ employees: EmployeeRef[] }>("/api/messages/employees").then((result) => {
-      if (result.success) setEmployees(result.data.employees)
+    apiFetch<{ users: ParticipantRef[] }>("/api/messages/users").then((result) => {
+      if (result.success) setUsers(result.data.users)
       else toast.error(result.error.message)
     })
   }, [open])
 
-  const filtered = (employees ?? []).filter((e) =>
-    `${e.firstName} ${e.lastName}`.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = (users ?? []).filter((u) => u.name.toLowerCase().includes(search.toLowerCase()))
 
-  async function handleSelect(employeeId: string) {
+  async function handleSelect(userId: string) {
     setStarting(true)
     try {
-      await onSelect(employeeId)
+      await onSelect(userId)
       onOpenChange(false)
     } finally {
       setStarting(false)
@@ -59,34 +54,32 @@ export function NewConversationDialog({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search employees…"
+            placeholder="Search people…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
         <div className="flex max-h-80 flex-col overflow-y-auto">
-          {!employees ? (
+          {!users ? (
             <div className="flex justify-center py-6">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : filtered.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No employees found.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">No one found.</p>
           ) : (
-            filtered.map((e) => (
+            filtered.map((u) => (
               <button
-                key={e.id}
+                key={u.id}
                 disabled={starting}
-                onClick={() => handleSelect(e.id)}
+                onClick={() => handleSelect(u.id)}
                 className="flex items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
               >
                 <Avatar className="size-8">
-                  {e.profilePhotoUrl && <AvatarImage src={`/api/employees/${e.id}/photo`} />}
-                  <AvatarFallback className="text-xs">{initials(e.firstName, e.lastName)}</AvatarFallback>
+                  {u.employeeId && <AvatarImage src={`/api/employees/${u.employeeId}/photo`} />}
+                  <AvatarFallback className="text-xs">{initials(u.name)}</AvatarFallback>
                 </Avatar>
-                <span>
-                  {e.firstName} {e.lastName}
-                </span>
+                <span>{u.name}</span>
               </button>
             ))
           )}

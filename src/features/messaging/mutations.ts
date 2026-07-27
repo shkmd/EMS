@@ -5,22 +5,21 @@ import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { saveUploadedFile, assertAllowedFile, ALLOWED_DOCUMENT_MIME_TYPES, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { isConversationParticipant } from "@/features/messaging/authorization"
-import { publishToEmployee } from "@/features/messaging/lib/realtime"
+import { publishToUser } from "@/features/messaging/lib/realtime"
 import type { SendMessageInput } from "@/features/messaging/schemas"
 
 const ALLOWED_ATTACHMENT_MIME_TYPES = [...new Set([...ALLOWED_DOCUMENT_MIME_TYPES, ...ALLOWED_PHOTO_MIME_TYPES])]
 
-export async function startConversation(targetEmployeeId: string, viewer: AccessTokenPayload) {
-  if (!viewer.employeeId) throw new ValidationError("Your account isn't linked to an employee profile yet")
-  if (targetEmployeeId === viewer.employeeId) throw new ValidationError("You can't start a conversation with yourself")
+export async function startConversation(targetUserId: string, viewer: AccessTokenPayload) {
+  if (targetUserId === viewer.sub) throw new ValidationError("You can't start a conversation with yourself")
 
-  const target = await prisma.employee.findUnique({
-    where: { id: targetEmployeeId, deletedAt: null },
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId, isActive: true },
     select: { id: true },
   })
-  if (!target) throw new NotFoundError("Employee not found")
+  if (!target) throw new NotFoundError("User not found")
 
-  const [participantAId, participantBId] = [viewer.employeeId, targetEmployeeId].sort()
+  const [participantAId, participantBId] = [viewer.sub, targetUserId].sort()
 
   const conversation = await prisma.conversation.upsert({
     where: { participantAId_participantBId: { participantAId, participantBId } },
@@ -37,11 +36,9 @@ export async function sendMessage(
   attachmentFile: File | null,
   viewer: AccessTokenPayload
 ) {
-  if (!viewer.employeeId) throw new ForbiddenError()
-
   const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
   if (!conversation) throw new NotFoundError("Conversation not found")
-  if (!isConversationParticipant(viewer.employeeId, conversation)) throw new ForbiddenError()
+  if (!isConversationParticipant(viewer.sub, conversation)) throw new ForbiddenError()
 
   const body = input.body?.trim() || null
   if (!body && !attachmentFile) throw new ValidationError("A message needs text or an attachment")
@@ -65,7 +62,7 @@ export async function sendMessage(
     prisma.message.create({
       data: {
         conversationId,
-        senderId: viewer.employeeId,
+        senderId: viewer.sub,
         body,
         attachmentUrl,
         attachmentName,
@@ -76,10 +73,9 @@ export async function sendMessage(
     prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }),
   ])
 
-  const recipientId =
-    conversation.participantAId === viewer.employeeId ? conversation.participantBId : conversation.participantAId
+  const recipientId = conversation.participantAId === viewer.sub ? conversation.participantBId : conversation.participantAId
 
-  publishToEmployee(recipientId, {
+  publishToUser(recipientId, {
     type: "message",
     conversationId,
     message: {
@@ -99,14 +95,12 @@ export async function sendMessage(
 }
 
 export async function markConversationRead(conversationId: string, viewer: AccessTokenPayload) {
-  if (!viewer.employeeId) throw new ForbiddenError()
-
   const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
   if (!conversation) throw new NotFoundError("Conversation not found")
-  if (!isConversationParticipant(viewer.employeeId, conversation)) throw new ForbiddenError()
+  if (!isConversationParticipant(viewer.sub, conversation)) throw new ForbiddenError()
 
   await prisma.message.updateMany({
-    where: { conversationId, senderId: { not: viewer.employeeId }, readAt: null },
+    where: { conversationId, senderId: { not: viewer.sub }, readAt: null },
     data: { readAt: new Date() },
   })
 }

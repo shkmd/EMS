@@ -1,13 +1,13 @@
-export type EmployeeRef = {
+export type ParticipantRef = {
   id: string
-  firstName: string
-  lastName: string
+  name: string
   profilePhotoUrl: string | null
+  employeeId: string | null
 }
 
 export type ConversationSummary = {
   id: string
-  other: EmployeeRef
+  other: ParticipantRef
   lastMessage: { body: string | null; attachmentName: string | null; senderId: string; createdAt: string } | null
   unreadCount: number
   updatedAt: string

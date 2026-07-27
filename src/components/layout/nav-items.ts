@@ -28,8 +28,6 @@ export type NavItem = {
   roles?: Role[]
   /** Modules not yet built — rendered disabled with a "Soon" badge. */
   comingSoon?: boolean
-  /** Only shown to accounts linked to an employee profile (e.g. messaging needs a sender identity). */
-  requiresEmployeeProfile?: boolean
 }
 
 export type NavGroup = {
@@ -71,7 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Assets", href: "/assets", icon: Laptop },
       { label: "Announcements", href: "/announcements", icon: Megaphone },
-      { label: "Messages", href: "/messages", icon: MessageSquare, requiresEmployeeProfile: true },
+      { label: "Messages", href: "/messages", icon: MessageSquare },
     ],
   },
   {

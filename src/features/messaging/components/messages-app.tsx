@@ -7,18 +7,18 @@ import { apiFetch } from "@/lib/api-client"
 import { ConversationList } from "@/features/messaging/components/conversation-list"
 import { MessageThread } from "@/features/messaging/components/message-thread"
 import { NewConversationDialog } from "@/features/messaging/components/new-conversation-dialog"
-import type { ConversationSummary, EmployeeRef, MessageItem } from "@/features/messaging/lib/types"
+import type { ConversationSummary, ParticipantRef, MessageItem } from "@/features/messaging/lib/types"
 
 export function MessagesApp({
   initialConversations,
-  currentEmployeeId,
+  currentUserId,
 }: {
   initialConversations: ConversationSummary[]
-  currentEmployeeId: string
+  currentUserId: string
 }) {
   const [conversations, setConversations] = useState(initialConversations)
   const [activeId, setActiveId] = useState<string | null>(initialConversations[0]?.id ?? null)
-  const [activeOther, setActiveOther] = useState<EmployeeRef | null>(null)
+  const [activeOther, setActiveOther] = useState<ParticipantRef | null>(null)
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -35,7 +35,7 @@ export function MessagesApp({
     setActiveId(id)
     setMobileView("thread")
     setIsLoadingMessages(true)
-    const result = await apiFetch<{ conversation: { id: string; other: EmployeeRef }; messages: MessageItem[] }>(
+    const result = await apiFetch<{ conversation: { id: string; other: ParticipantRef }; messages: MessageItem[] }>(
       `/api/messages/conversations/${id}`
     )
     if (result.success) {
@@ -121,10 +121,10 @@ export function MessagesApp({
     refreshConversations()
   }
 
-  async function handleStartConversation(employeeId: string) {
+  async function handleStartConversation(userId: string) {
     const result = await apiFetch<{ conversation: { id: string } }>("/api/messages/conversations", {
       method: "POST",
-      body: { employeeId },
+      body: { userId },
     })
     if (!result.success) {
       toast.error(result.error.message)
@@ -148,7 +148,7 @@ export function MessagesApp({
         <MessageThread
           other={activeOther}
           messages={messages}
-          currentEmployeeId={currentEmployeeId}
+          currentUserId={currentUserId}
           isLoading={isLoadingMessages}
           onSend={handleSend}
           onBack={() => setMobileView("list")}

@@ -41,7 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <SidebarProvider>
-      <AppSidebar role={user.role} hasEmployeeProfile={!!user.employee} />
+      <AppSidebar role={user.role} />
       <SidebarInset>
         <Topbar
           name={displayName}

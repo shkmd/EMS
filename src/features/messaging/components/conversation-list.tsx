@@ -7,11 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { initials } from "@/features/messaging/lib/initials"
 import type { ConversationSummary } from "@/features/messaging/lib/types"
-
-function initials(firstName: string, lastName: string) {
-  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase()
-}
 
 export function ConversationList({
   conversations,
@@ -52,14 +49,12 @@ export function ConversationList({
               )}
             >
               <Avatar className="size-9 shrink-0">
-                {c.other.profilePhotoUrl && <AvatarImage src={`/api/employees/${c.other.id}/photo`} />}
-                <AvatarFallback>{initials(c.other.firstName, c.other.lastName)}</AvatarFallback>
+                {c.other.employeeId && <AvatarImage src={`/api/employees/${c.other.employeeId}/photo`} />}
+                <AvatarFallback>{initials(c.other.name)}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {c.other.firstName} {c.other.lastName}
-                  </span>
+                  <span className="truncate text-sm font-medium">{c.other.name}</span>
                   {c.lastMessage && (
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {formatDistanceToNow(new Date(c.lastMessage.createdAt), { addSuffix: false })}

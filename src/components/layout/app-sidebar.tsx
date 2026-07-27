@@ -22,13 +22,11 @@ import { NAV_GROUPS } from "@/components/layout/nav-items"
 import { apiFetch } from "@/lib/api-client"
 import type { Role } from "@prisma/client"
 
-export function AppSidebar({ role, hasEmployeeProfile }: { role: Role; hasEmployeeProfile: boolean }) {
+export function AppSidebar({ role }: { role: Role }) {
   const pathname = usePathname()
   const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
-    if (!hasEmployeeProfile) return
-
     async function load() {
       const result = await apiFetch<{ count: number }>("/api/messages/unread-count")
       if (result.success) setUnreadMessages(result.data.count)
@@ -36,7 +34,7 @@ export function AppSidebar({ role, hasEmployeeProfile }: { role: Role; hasEmploy
     load()
     const interval = setInterval(load, 20_000)
     return () => clearInterval(interval)
-  }, [hasEmployeeProfile])
+  }, [])
 
   return (
     <Sidebar collapsible="icon">
@@ -50,9 +48,7 @@ export function AppSidebar({ role, hasEmployeeProfile }: { role: Role; hasEmploy
       </SidebarHeader>
       <SidebarContent>
         {NAV_GROUPS.map((group) => {
-          const visibleItems = group.items.filter(
-            (item) => (!item.roles || item.roles.includes(role)) && (!item.requiresEmployeeProfile || hasEmployeeProfile)
-          )
+          const visibleItems = group.items.filter((item) => !item.roles || item.roles.includes(role))
           if (visibleItems.length === 0) return null
 
           return (

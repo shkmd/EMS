@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 export const startConversationSchema = z.object({
-  employeeId: z.string().min(1, "Select an employee"),
+  userId: z.string().min(1, "Select someone to message"),
 })
 export type StartConversationInput = z.infer<typeof startConversationSchema>
 

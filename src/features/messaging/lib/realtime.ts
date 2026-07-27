@@ -37,11 +37,11 @@ const emitter = globalForRealtime.messagingEmitter ?? new EventEmitter()
 emitter.setMaxListeners(0)
 globalForRealtime.messagingEmitter = emitter
 
-export function publishToEmployee(employeeId: string, event: RealtimeMessageEvent) {
-  emitter.emit(`employee:${employeeId}`, event)
+export function publishToUser(userId: string, event: RealtimeMessageEvent) {
+  emitter.emit(`user:${userId}`, event)
 }
 
-export function subscribeToEmployee(employeeId: string, listener: (event: RealtimeMessageEvent) => void) {
-  emitter.on(`employee:${employeeId}`, listener)
-  return () => emitter.off(`employee:${employeeId}`, listener)
+export function subscribeToUser(userId: string, listener: (event: RealtimeMessageEvent) => void) {
+  emitter.on(`user:${userId}`, listener)
+  return () => emitter.off(`user:${userId}`, listener)
 }

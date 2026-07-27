@@ -1,6 +1,6 @@
 export function isConversationParticipant(
-  viewerEmployeeId: string,
+  viewerUserId: string,
   conversation: { participantAId: string; participantBId: string }
 ) {
-  return viewerEmployeeId === conversation.participantAId || viewerEmployeeId === conversation.participantBId
+  return viewerUserId === conversation.participantAId || viewerUserId === conversation.participantBId
 }

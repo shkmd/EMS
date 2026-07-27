@@ -4,17 +4,32 @@ import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import { isConversationParticipant } from "@/features/messaging/authorization"
 import type { MessagesListQuery } from "@/features/messaging/schemas"
+import type { ParticipantRef } from "@/features/messaging/lib/types"
 
 const participantSelect = {
   id: true,
-  firstName: true,
-  lastName: true,
-  profilePhotoUrl: true,
-} satisfies Record<string, true>
+  email: true,
+  employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
+} satisfies Record<string, unknown>
 
-export async function listConversations(viewerEmployeeId: string) {
+type ParticipantRow = {
+  id: string
+  email: string
+  employee: { id: string; firstName: string; lastName: string; profilePhotoUrl: string | null } | null
+}
+
+function toParticipantRef(user: ParticipantRow): ParticipantRef {
+  return {
+    id: user.id,
+    name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user.email.split("@")[0]!,
+    profilePhotoUrl: user.employee?.profilePhotoUrl ?? null,
+    employeeId: user.employee?.id ?? null,
+  }
+}
+
+export async function listConversations(viewerUserId: string) {
   const conversations = await prisma.conversation.findMany({
-    where: { OR: [{ participantAId: viewerEmployeeId }, { participantBId: viewerEmployeeId }] },
+    where: { OR: [{ participantAId: viewerUserId }, { participantBId: viewerUserId }] },
     include: {
       participantA: { select: participantSelect },
       participantB: { select: participantSelect },
@@ -28,18 +43,18 @@ export async function listConversations(viewerEmployeeId: string) {
     conversationIds.length > 0
       ? await prisma.message.groupBy({
           by: ["conversationId"],
-          where: { conversationId: { in: conversationIds }, senderId: { not: viewerEmployeeId }, readAt: null },
+          where: { conversationId: { in: conversationIds }, senderId: { not: viewerUserId }, readAt: null },
           _count: { _all: true },
         })
       : []
   const unreadByConversation = new Map(unreadGroups.map((g) => [g.conversationId, g._count._all]))
 
   return conversations.map((c) => {
-    const other = c.participantAId === viewerEmployeeId ? c.participantB : c.participantA
+    const other = c.participantAId === viewerUserId ? c.participantB : c.participantA
     const lastMessage = c.messages[0] ?? null
     return {
       id: c.id,
-      other,
+      other: toParticipantRef(other),
       lastMessage: lastMessage
         ? {
             body: lastMessage.body,
@@ -54,7 +69,7 @@ export async function listConversations(viewerEmployeeId: string) {
   })
 }
 
-export async function getConversationForViewer(conversationId: string, viewerEmployeeId: string) {
+export async function getConversationForViewer(conversationId: string, viewerUserId: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
@@ -63,16 +78,16 @@ export async function getConversationForViewer(conversationId: string, viewerEmp
     },
   })
   if (!conversation) throw new NotFoundError("Conversation not found")
-  if (!isConversationParticipant(viewerEmployeeId, conversation)) throw new ForbiddenError()
+  if (!isConversationParticipant(viewerUserId, conversation)) throw new ForbiddenError()
 
-  const other = conversation.participantAId === viewerEmployeeId ? conversation.participantB : conversation.participantA
-  return { id: conversation.id, other }
+  const other = conversation.participantAId === viewerUserId ? conversation.participantB : conversation.participantA
+  return { id: conversation.id, other: toParticipantRef(other) }
 }
 
-export async function listMessages(conversationId: string, viewerEmployeeId: string, query: MessagesListQuery) {
+export async function listMessages(conversationId: string, viewerUserId: string, query: MessagesListQuery) {
   const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
   if (!conversation) throw new NotFoundError("Conversation not found")
-  if (!isConversationParticipant(viewerEmployeeId, conversation)) throw new ForbiddenError()
+  if (!isConversationParticipant(viewerUserId, conversation)) throw new ForbiddenError()
 
   const messages = await prisma.message.findMany({
     where: { conversationId },
@@ -86,20 +101,25 @@ export async function listMessages(conversationId: string, viewerEmployeeId: str
   return { messages: page.reverse(), hasMore, nextCursor: hasMore ? page[0]?.id : undefined }
 }
 
-export async function listMessageableEmployees(viewerEmployeeId: string) {
-  return prisma.employee.findMany({
-    where: { deletedAt: null, status: "ACTIVE", id: { not: viewerEmployeeId } },
-    select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
-    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+export async function listMessageableUsers(viewerUserId: string) {
+  const users = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      id: { not: viewerUserId },
+      OR: [{ employee: null }, { employee: { deletedAt: null, status: "ACTIVE" } }],
+    },
+    select: participantSelect,
   })
+
+  return users.map(toParticipantRef).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function getTotalUnreadCount(viewerEmployeeId: string) {
+export async function getTotalUnreadCount(viewerUserId: string) {
   return prisma.message.count({
     where: {
       readAt: null,
-      senderId: { not: viewerEmployeeId },
-      conversation: { OR: [{ participantAId: viewerEmployeeId }, { participantBId: viewerEmployeeId }] },
+      senderId: { not: viewerUserId },
+      conversation: { OR: [{ participantAId: viewerUserId }, { participantBId: viewerUserId }] },
     },
   })
 }

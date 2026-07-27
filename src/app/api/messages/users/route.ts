@@ -1,12 +1,12 @@
 import { apiError, apiSuccess } from "@/lib/api-response"
 import { requireSession } from "@/features/auth/session"
-import { getTotalUnreadCount } from "@/features/messaging/queries"
+import { listMessageableUsers } from "@/features/messaging/queries"
 
 export async function GET() {
   try {
     const session = await requireSession()
-    const count = await getTotalUnreadCount(session.sub)
-    return apiSuccess({ count })
+    const users = await listMessageableUsers(session.sub)
+    return apiSuccess({ users })
   } catch (error) {
     return apiError(error)
   }
