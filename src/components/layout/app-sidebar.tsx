@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Building2 } from "lucide-react"
@@ -18,10 +19,24 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { NAV_GROUPS } from "@/components/layout/nav-items"
+import { apiFetch } from "@/lib/api-client"
 import type { Role } from "@prisma/client"
 
-export function AppSidebar({ role }: { role: Role }) {
+export function AppSidebar({ role, hasEmployeeProfile }: { role: Role; hasEmployeeProfile: boolean }) {
   const pathname = usePathname()
+  const [unreadMessages, setUnreadMessages] = useState(0)
+
+  useEffect(() => {
+    if (!hasEmployeeProfile) return
+
+    async function load() {
+      const result = await apiFetch<{ count: number }>("/api/messages/unread-count")
+      if (result.success) setUnreadMessages(result.data.count)
+    }
+    load()
+    const interval = setInterval(load, 20_000)
+    return () => clearInterval(interval)
+  }, [hasEmployeeProfile])
 
   return (
     <Sidebar collapsible="icon">
@@ -35,7 +50,9 @@ export function AppSidebar({ role }: { role: Role }) {
       </SidebarHeader>
       <SidebarContent>
         {NAV_GROUPS.map((group) => {
-          const visibleItems = group.items.filter((item) => !item.roles || item.roles.includes(role))
+          const visibleItems = group.items.filter(
+            (item) => (!item.roles || item.roles.includes(role)) && (!item.requiresEmployeeProfile || hasEmployeeProfile)
+          )
           if (visibleItems.length === 0) return null
 
           return (
@@ -70,6 +87,9 @@ export function AppSidebar({ role }: { role: Role }) {
                           </SidebarMenuButton>
                         )}
                         {item.comingSoon && <SidebarMenuBadge>Soon</SidebarMenuBadge>}
+                        {item.href === "/messages" && unreadMessages > 0 && (
+                          <SidebarMenuBadge>{unreadMessages > 9 ? "9+" : unreadMessages}</SidebarMenuBadge>
+                        )}
                       </SidebarMenuItem>
                     )
                   })}
