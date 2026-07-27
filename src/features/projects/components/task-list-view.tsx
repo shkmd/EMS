@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { initials } from "@/features/messaging/lib/initials"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
-import { TaskDetailSheet } from "@/features/projects/components/task-detail-sheet"
+import { TaskDetailDialog } from "@/features/projects/components/task-detail-dialog"
 import {
   TASK_PRIORITY_BADGE,
   TASK_PRIORITY_LABEL,
@@ -243,7 +243,7 @@ export function TaskListView({
         onSaved={refresh}
       />
 
-      <TaskDetailSheet
+      <TaskDetailDialog
         projectId={projectId}
         task={detailTarget}
         assignableEmployees={assignableEmployees}

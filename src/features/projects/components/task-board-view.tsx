@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { TaskCard } from "@/features/projects/components/task-card"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
-import { TaskDetailSheet } from "@/features/projects/components/task-detail-sheet"
+import { TaskDetailDialog } from "@/features/projects/components/task-detail-dialog"
 import { TASK_STATUS_BADGE, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "@/features/projects/lib/labels"
 import type { AssigneeRef, TaskItem } from "@/features/projects/lib/types"
 
@@ -218,7 +218,7 @@ export function TaskBoardView({
         onSaved={refresh}
       />
 
-      <TaskDetailSheet
+      <TaskDetailDialog
         projectId={projectId}
         task={detailTarget}
         assignableEmployees={assignableEmployees}

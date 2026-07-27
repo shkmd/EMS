@@ -8,8 +8,8 @@ import { Loader2, Pencil, Send } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
@@ -33,7 +33,7 @@ function FeedAvatar({ actor }: { actor: { name: string; profilePhotoUrl: string 
   )
 }
 
-export function TaskDetailSheet({
+export function TaskDetailDialog({
   projectId,
   task,
   assignableEmployees,
@@ -107,18 +107,18 @@ export function TaskDetailSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-3xl">
-          <SheetHeader className="border-b">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex h-[85vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b p-4">
             <div className="flex items-start justify-between gap-2 pr-8">
-              <SheetTitle className="text-xl">{task.title}</SheetTitle>
+              <DialogTitle className="text-xl">{task.title}</DialogTitle>
               {canManage && (
                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                   <Pencil /> Edit
                 </Button>
               )}
             </div>
-          </SheetHeader>
+          </DialogHeader>
 
           <div className="flex min-h-0 flex-1">
             <div className="flex w-3/5 flex-col gap-4 overflow-y-auto border-r p-4">
@@ -228,8 +228,8 @@ export function TaskDetailSheet({
               </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {canManage && (
         <TaskFormDialog
