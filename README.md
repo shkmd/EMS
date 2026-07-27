@@ -78,6 +78,12 @@ This project is being built module by module. Current status:
       two employees, with text and/or a file/image attachment per message,
       and real-time delivery via Server-Sent Events (no WebSocket server or
       new deployment shape required)
+- [x] **Module 18 — Projects & tasks:** a ClickUp/Trello-style tracker —
+      multiple projects, each with tasks carrying a status, priority,
+      dates, and one or more assignees. SUPER_ADMIN/HR/MANAGER create
+      projects and assign tasks; any employee can update the status of a
+      task assigned to them. Three views: List (grouped by status), Board
+      (drag-and-drop Kanban), and Gantt (a custom day-grid timeline)
 
 ## Getting started (local development)
 
@@ -225,7 +231,7 @@ src/
     auth/ employees/ departments/ designations/ attendance/ leave/
     holidays/ payroll/ performance/ assets/ announcements/
     notifications/ reports/ settings/ dashboard/ verticals/ users/ audit/
-    expenses/ messaging/
+    expenses/ messaging/ projects/
   hooks/                  # shared React hooks
   lib/                    # framework-agnostic server utilities (prisma client,
                           # jwt, password hashing, rate limiting, audit log, ...)
@@ -502,10 +508,17 @@ primitives so modules can be reviewed and shipped independently.
 
 ## Messaging module notes
 
-- **1:1 direct messages only**, open to any employee messaging any other
-  employee — no group chats, no vertical/department restriction. A
-  `Conversation` between two employees is always stored with
-  `participantAId < participantBId` (lexicographic sort of the two employee
+- **1:1 direct messages only**, open to any authenticated account — no group
+  chats, no vertical/department restriction. `Conversation`/`Message` are
+  keyed by `User.id`, not `Employee.id` — reworked after launch when a pure
+  admin account with no linked Employee profile (`admin@deployandtest.com`)
+  turned out to be locked out entirely, since every other self-service
+  feature (Leave, Attendance, Expenses, Payroll, Assets) gates on an Employee
+  profile and messaging originally copied that convention without needing
+  to. A participant with no Employee record falls back to the email's
+  local-part for a display name and no photo, matching the sidebar's
+  existing display-name convention. A `Conversation` is always stored with
+  `participantAId < participantBId` (lexicographic sort of the two user
   IDs), so starting a conversation from either side finds the same existing
   row via an `upsert` instead of creating a duplicate pair.
 - **Real-time delivery via Server-Sent Events, not WebSockets.** Next.js
@@ -555,6 +568,48 @@ primitives so modules can be reviewed and shipped independently.
   refresh), confirmed a non-participant is correctly blocked (403) from
   reading, sending into, or downloading attachments from a conversation
   they're not part of, then fully removed the test accounts afterward.
+
+## Projects & tasks module notes
+
+- **Multiple projects** (like ClickUp Spaces), each holding its own tasks —
+  not one shared company-wide board. Every authenticated account can view
+  every project; `SUPER_ADMIN`/`HR`/`MANAGER` create projects and
+  create/edit/assign/delete tasks; any employee can update the `status` of a
+  task they're assigned to (`isTaskAssignee` in
+  `src/features/projects/authorization.ts`) — the same manage-vs-self-service
+  split used by Leave, Expenses, and every other module. Tasks can have
+  multiple assignees (`TaskAssignee` join table against `Employee`, not
+  `User` — task assignment is a work-identity concept, unlike messaging's
+  participants).
+- **Three views over the same data, built in order of complexity**: List
+  (grouped by status, inline quick-status `Select`), Board (drag-and-drop
+  Kanban via `@dnd-kit`), and Gantt (a hand-rolled day-grid timeline built
+  from `date-fns` interval math — deliberately not a third-party Gantt
+  library, to keep full control over a fairly simple visualization: a fixed
+  labels pane plus a horizontally-scrollable day/month header with
+  color-coded bars).
+- **Board drag-and-drop is manager-only**; employees see a static board with
+  the same inline status control as List on just their own cards. A single
+  `reorderTasks` mutation (manager-only) takes a destination status plus the
+  full ordered list of task IDs for that column and rewrites
+  `status`/`position` for all of them in one transaction — simpler and less
+  error-prone than computing a single insertion index against neighboring
+  positions on every drop.
+- **Gantt splits tasks into "scheduled" and "unscheduled"** rather than
+  guessing placement for tasks missing dates: a task needs at least a
+  `startDate` or `dueDate` to appear on the timeline (a single date renders
+  as a one-day bar); tasks with neither are listed separately below with a
+  prompt to add a date. The visible date range is derived from the
+  earliest/latest task dates present (padded a few days either side), not a
+  fixed calendar window.
+- Verified live on production end-to-end for all three phases: created a
+  project and task as a manager and assigned it to a real employee; confirmed
+  the assignee can update just that task's status (200) while a different,
+  uninvolved employee is rejected (403); confirmed the manager-only reorder
+  endpoint moves a task's status/position correctly; confirmed a task with
+  both dates set and a task with neither come back from the API exactly as
+  the Gantt view's scheduled/unscheduled split expects. All test data removed
+  afterward.
 
 ## Performance module notes
 
