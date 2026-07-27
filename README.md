@@ -74,6 +74,10 @@ This project is being built module by module. Current status:
       with an optional receipt upload, mirroring Leave's two-stage
       manager → HR approval workflow, plus an HR-only reimbursement step and
       self-service cancellation while a claim is still pending
+- [x] **Module 17 — Internal messaging:** 1:1 direct messages between any
+      two employees, with text and/or a file/image attachment per message,
+      and real-time delivery via Server-Sent Events (no WebSocket server or
+      new deployment shape required)
 
 ## Getting started (local development)
 
@@ -221,7 +225,7 @@ src/
     auth/ employees/ departments/ designations/ attendance/ leave/
     holidays/ payroll/ performance/ assets/ announcements/
     notifications/ reports/ settings/ dashboard/ verticals/ users/ audit/
-    expenses/
+    expenses/ messaging/
   hooks/                  # shared React hooks
   lib/                    # framework-agnostic server utilities (prisma client,
                           # jwt, password hashing, rate limiting, audit log, ...)
@@ -287,6 +291,28 @@ primitives so modules can be reviewed and shipped independently.
 - Every chart and stat card has an explicit empty state — dashboard data is
   real (not mocked), so a fresh database with few employees legitimately has
   zero attendance/leave history to show.
+- **Every stat card is a real link** to the page it summarizes (Employees
+  filtered by status, Departments, Leave's Approvals tab, Attendance's Team
+  tab, or `#celebrations` for birthdays/anniversaries) rather than a static
+  tile — the Leave and Attendance pages accept a `?tab=` param specifically
+  so these links land on the relevant tab, not just the module's default one.
+- **The whole dashboard is scoped to a Vertical** (the business-unit concept
+  introduced alongside Department in an earlier module): Super Admin/HR get
+  a filter dropdown defaulting to "All Verticals" and switchable to any
+  specific one via `?vertical=<id>`; every other role is silently locked to
+  their own employee record's vertical with no switcher shown at all — "the
+  Amarc list should only show Amarc people," not merely default to it.
+  Department count/chart needed a different query shape than the rest since
+  `Department` has no `verticalId` of its own — both now count through the
+  `employee` relation instead of a plain `_count`.
+- A few real dashboard-query bugs were caught live while building the
+  vertical filter: `getAttendanceToday`'s "present" count,
+  `getAttendanceStatistics`, `getPendingLeaveRequestsCount`, and
+  `getLeaveStatistics` never filtered by `employee.deletedAt`, unlike every
+  other dashboard query — after the original seed demo employees were
+  terminated, their old attendance/leave records were still being counted
+  company-wide, producing an impossible "Attendance Today: 5 / 3" (more
+  present than total active employees).
 
 ## Employee module notes
 
@@ -473,6 +499,62 @@ primitives so modules can be reviewed and shipped independently.
   denials (employee blocked from manager/HR actions, manager blocked from
   reimbursing, double-reimburse and cancel-after-terminal-state both
   rejected server-side).
+
+## Messaging module notes
+
+- **1:1 direct messages only**, open to any employee messaging any other
+  employee — no group chats, no vertical/department restriction. A
+  `Conversation` between two employees is always stored with
+  `participantAId < participantBId` (lexicographic sort of the two employee
+  IDs), so starting a conversation from either side finds the same existing
+  row via an `upsert` instead of creating a duplicate pair.
+- **Real-time delivery via Server-Sent Events, not WebSockets.** Next.js
+  Route Handlers support a streaming `Response` natively, so
+  `/api/messages/stream` works within the standard request model — a real
+  WebSocket server would have meant bypassing Next's request handling
+  entirely with a custom server, a much bigger change for this app's
+  deployment shape. New-message events are published through an in-process
+  `EventEmitter` (`src/features/messaging/lib/realtime.ts`); since this app
+  runs as a single Docker replica, that's sufficient pub/sub without adding
+  Redis — revisit if it's ever scaled to multiple instances.
+- **Real bug caught in production, not local testing**: the EventEmitter's
+  `globalThis` singleton assignment was originally gated to non-production
+  (assumed only needed to survive dev-mode hot-reload). It's also needed in
+  production — Next.js compiles each Route Handler into its own bundle, so
+  the send-message route and the SSE stream route each evaluated
+  `realtime.ts` independently, ending up with two EventEmitters that never
+  saw each other's events. Symptom: messages sent successfully, but the
+  recipient's open SSE connection never fired. Fixed by making the
+  `globalThis` share unconditional.
+- **Attachments reuse the Employee Documents/Expense receipts security
+  model** verbatim (`assertAllowedFile`, `saveUploadedFile`, a
+  `Content-Disposition: attachment` download route) — combining
+  `ALLOWED_DOCUMENT_MIME_TYPES` and `ALLOWED_PHOTO_MIME_TYPES` since a
+  message attachment can reasonably be either a document or an image.
+- Also surfaced a **pre-existing upload-permissions bug** unrelated to
+  messaging's own code: the `ems_uploads` Docker volume was owned by `root`
+  with `755` permissions, so the non-root `nextjs` user the Dockerfile runs
+  as couldn't create a brand-new subdirectory under
+  `storage/uploads/` — it could only write into subdirectories that already
+  existed. This would have eventually broken the *first* document/receipt
+  upload for any new employee too, not just messaging's own
+  `messages/<conversationId>/` folders. Fixed with a one-time
+  `chown -R nextjs:nodejs` on the volume (persists for the volume's
+  lifetime; redo after any future volume recreation, e.g. a fresh server).
+- The conversation list, message thread, and composer are one client
+  component tree (`messages-app.tsx`) rather than independent
+  self-fetching pieces, specifically so a message arriving over SSE can be
+  appended directly into whichever conversation is currently open — the
+  same event also updates the conversation list's last-message preview and
+  unread badge in one pass. Mobile gets an explicit list↔thread toggle
+  (`onBack`) — a fixed two-column layout would leave no way back to the
+  conversation list on a small screen.
+- Verified live on production end-to-end: two throwaway employees created,
+  messaged each other with a real file attachment, confirmed the recipient
+  received the message via a live SSE connection (not just via a page
+  refresh), confirmed a non-participant is correctly blocked (403) from
+  reading, sending into, or downloading attachments from a conversation
+  they're not part of, then fully removed the test accounts afterward.
 
 ## Performance module notes
 
