@@ -11,6 +11,8 @@ import { DepartmentChart } from "@/features/dashboard/components/department-char
 import { AttendanceChart } from "@/features/dashboard/components/attendance-chart";
 import { LeaveChart } from "@/features/dashboard/components/leave-chart";
 import { CelebrationsCard } from "@/features/dashboard/components/celebrations-card";
+import { TodayCard } from "@/features/attendance/components/today-card";
+import { getTodayAttendance } from "@/features/attendance/queries";
 import {
   getEmployeeStats,
   getPendingLeaveRequestsCount,
@@ -55,6 +57,7 @@ export default async function DashboardPage({
     departmentCounts,
     attendanceStats,
     leaveStats,
+    todayAttendance,
   ] = await Promise.all([
     getEmployeeStats(verticalId),
     getPendingLeaveRequestsCount(verticalId),
@@ -65,6 +68,7 @@ export default async function DashboardPage({
     getDepartmentWiseEmployeeCounts(verticalId),
     getAttendanceStatistics(14, verticalId),
     getLeaveStatistics(verticalId),
+    session.employeeId ? getTodayAttendance(session.employeeId) : Promise.resolve(null),
   ]);
 
   return (
@@ -79,6 +83,28 @@ export default async function DashboardPage({
           <Badge variant="secondary">Showing: {verticals.find((v) => v.id === verticalId)?.name}</Badge>
         )}
       </div>
+
+      {session.employeeId && (
+        <TodayCard
+          initial={
+            todayAttendance
+              ? {
+                  id: todayAttendance.id,
+                  status: todayAttendance.status,
+                  checkIn: todayAttendance.checkIn?.toISOString() ?? null,
+                  checkOut: todayAttendance.checkOut?.toISOString() ?? null,
+                  workingMinutes: todayAttendance.workingMinutes,
+                  breakMinutes: todayAttendance.breakMinutes,
+                  breaks: todayAttendance.breaks.map((b) => ({
+                    id: b.id,
+                    breakStart: b.breakStart.toISOString(),
+                    breakEnd: b.breakEnd?.toISOString() ?? null,
+                  })),
+                }
+              : null
+          }
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Total Employees" value={employeeStats.total} icon={Users} href="/employees" />
