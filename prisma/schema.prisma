@@ -231,6 +231,7 @@ model User {
   tasksCreated        Task[]                @relation("TaskCreatedBy")
   taskComments        TaskComment[]
   taskActivities      TaskActivity[]
+  taskAttachments     TaskAttachment[]
 
   @@index([role])
   @@map("users")
@@ -904,17 +905,56 @@ model Task {
   // (drag-and-drop) view — assigned at creation, reassigned on reorder.
   position    Int          @default(0)
   createdById String
+  // Single-level subtasks only: a subtask (non-null parentTaskId) cannot
+  // itself have subtasks — enforced in the mutation, not the DB.
+  parentTaskId String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy  User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  assignees  TaskAssignee[]
-  comments   TaskComment[]
-  activities TaskActivity[]
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  parentTask     Task?               @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks       Task[]              @relation("TaskSubtasks")
+  assignees      TaskAssignee[]
+  comments       TaskComment[]
+  activities     TaskActivity[]
+  checklistItems TaskChecklistItem[]
+  attachments    TaskAttachment[]
 
   @@index([projectId, status])
+  @@index([parentTaskId])
   @@map("tasks")
+}
+
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  text      String
+  isDone    Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+  @@map("task_checklist_items")
+}
+
+model TaskAttachment {
+  id             String   @id @default(cuid())
+  taskId         String
+  uploadedById   String
+  fileUrl        String
+  fileName       String
+  fileType       String
+  fileSize       Int
+  createdAt      DateTime @default(now())
+
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("task_attachments")
 }
 
 model TaskAssignee {

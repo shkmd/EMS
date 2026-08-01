@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
-import { Loader2, Pencil, Send } from "lucide-react"
+import { Download, Loader2, Paperclip, Pencil, Plus, Send, Trash2, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -22,7 +24,7 @@ import {
   TASK_STATUS_LABEL,
   TASK_STATUS_ORDER,
 } from "@/features/projects/lib/labels"
-import type { AssigneeRef, TaskFeedItem, TaskItem } from "@/features/projects/lib/types"
+import type { AssigneeRef, TaskExtras, TaskFeedItem, TaskItem } from "@/features/projects/lib/types"
 
 function FeedAvatar({ actor }: { actor: { name: string; profilePhotoUrl: string | null; employeeId: string | null } }) {
   return (
@@ -33,12 +35,19 @@ function FeedAvatar({ actor }: { actor: { name: string; profilePhotoUrl: string 
   )
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export function TaskDetailDialog({
   projectId,
   task,
   assignableEmployees,
   canManage,
   currentEmployeeId,
+  currentUserId,
   open,
   onOpenChange,
   onTaskSaved,
@@ -48,6 +57,7 @@ export function TaskDetailDialog({
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
+  currentUserId: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onTaskSaved: () => void
@@ -56,13 +66,23 @@ export function TaskDetailDialog({
   const [comment, setComment] = useState("")
   const [isPosting, setIsPosting] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [extras, setExtras] = useState<TaskExtras | null>(null)
+  const [newChecklistText, setNewChecklistText] = useState("")
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open || !task) return
     setFeed(null)
+    setExtras(null)
     apiFetch<{ feed: TaskFeedItem[] }>(`/api/projects/${projectId}/tasks/${task.id}/feed`).then((result) => {
       if (result.success) setFeed(result.data.feed)
+      else toast.error(result.error.message)
+    })
+    apiFetch<TaskExtras>(`/api/projects/${projectId}/tasks/${task.id}/extras`).then((result) => {
+      if (result.success) setExtras(result.data)
       else toast.error(result.error.message)
     })
   }, [open, task, projectId])
@@ -74,6 +94,13 @@ export function TaskDetailDialog({
   if (!task) return null
 
   const canChangeStatus = canManage || (currentEmployeeId !== null && task.assignees.some((a) => a.id === currentEmployeeId))
+  const canEditExtras = canChangeStatus
+
+  async function refreshExtras() {
+    if (!task) return
+    const result = await apiFetch<TaskExtras>(`/api/projects/${projectId}/tasks/${task.id}/extras`)
+    if (result.success) setExtras(result.data)
+  }
 
   async function handleStatusChange(status: string) {
     if (!task) return
@@ -105,6 +132,110 @@ export function TaskDetailDialog({
     if (refreshed.success) setFeed(refreshed.data.feed)
   }
 
+  async function handleAddChecklistItem() {
+    if (!task || !newChecklistText.trim()) return
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${task.id}/checklist`, {
+      method: "POST",
+      body: { text: newChecklistText.trim() },
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    setNewChecklistText("")
+    refreshExtras()
+  }
+
+  async function handleToggleChecklistItem(itemId: string, isDone: boolean) {
+    if (!task) return
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${task.id}/checklist/${itemId}`, {
+      method: "PATCH",
+      body: { isDone },
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
+  async function handleDeleteChecklistItem(itemId: string) {
+    if (!task) return
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${task.id}/checklist/${itemId}`, { method: "DELETE" })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
+  async function handleAddSubtask() {
+    if (!task || !newSubtaskTitle.trim()) return
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${task.id}/subtasks`, {
+      method: "POST",
+      body: { title: newSubtaskTitle.trim() },
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    setNewSubtaskTitle("")
+    refreshExtras()
+  }
+
+  async function handleToggleSubtask(subtaskId: string, isDone: boolean) {
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${subtaskId}/status`, {
+      method: "PATCH",
+      body: { status: isDone ? "DONE" : "TODO" },
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
+  async function handleDeleteSubtask(subtaskId: string) {
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${subtaskId}`, { method: "DELETE" })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
+  async function handleFileChosen(file: File | undefined) {
+    if (!task || !file) return
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}/attachments`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    })
+    const result = await res.json()
+    setIsUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
+  async function handleDeleteAttachment(attachmentId: string) {
+    if (!task) return
+    const result = await apiFetch(`/api/projects/${projectId}/tasks/${task.id}/attachments/${attachmentId}`, {
+      method: "DELETE",
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    refreshExtras()
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,7 +252,7 @@ export function TaskDetailDialog({
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1">
-            <div className="flex w-3/5 flex-col gap-4 overflow-y-auto border-r p-4">
+            <div className="flex w-3/5 flex-col gap-5 overflow-y-auto border-r p-4">
               <div className="grid grid-cols-[5rem_1fr] items-center gap-y-3 text-sm">
                 <span className="text-muted-foreground">Status</span>
                 {canChangeStatus ? (
@@ -171,6 +302,123 @@ export function TaskDetailDialog({
               <div className="flex flex-col gap-1.5 border-t pt-4">
                 <span className="text-sm font-medium text-muted-foreground">Description</span>
                 <p className="text-sm whitespace-pre-wrap">{task.description || "No description."}</p>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Subtasks{extras && extras.subtasks.length > 0 ? ` (${extras.subtasks.filter((s) => s.status === "DONE").length}/${extras.subtasks.length})` : ""}
+                </span>
+                {extras?.subtasks.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={s.status === "DONE"}
+                      onCheckedChange={(checked) => handleToggleSubtask(s.id, checked === true)}
+                      disabled={!canManage}
+                    />
+                    <span className={cn("flex-1 text-sm", s.status === "DONE" && "text-muted-foreground line-through")}>
+                      {s.title}
+                    </span>
+                    {canManage && (
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteSubtask(s.id)}>
+                        <X className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {canManage && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddSubtask()}
+                      placeholder="Add subtask…"
+                      className="h-8 text-sm"
+                    />
+                    <Button variant="outline" size="icon-sm" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim()}>
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Checklist{extras && extras.checklistItems.length > 0 ? ` (${extras.checklistItems.filter((i) => i.isDone).length}/${extras.checklistItems.length})` : ""}
+                </span>
+                {extras?.checklistItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={item.isDone}
+                      onCheckedChange={(checked) => handleToggleChecklistItem(item.id, checked === true)}
+                      disabled={!canEditExtras}
+                    />
+                    <span className={cn("flex-1 text-sm", item.isDone && "text-muted-foreground line-through")}>
+                      {item.text}
+                    </span>
+                    {canEditExtras && (
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteChecklistItem(item.id)}>
+                        <X className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {canEditExtras && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newChecklistText}
+                      onChange={(e) => setNewChecklistText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem()}
+                      placeholder="Add checklist item…"
+                      className="h-8 text-sm"
+                    />
+                    <Button variant="outline" size="icon-sm" onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()}>
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <span className="text-sm font-medium text-muted-foreground">Attachments</span>
+                {extras?.attachments.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                    <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{a.fileName}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(a.fileSize)}</span>
+                    <a
+                      href={`/api/projects/${projectId}/tasks/${task.id}/attachments/${a.id}`}
+                      download
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Download className="size-3.5" />
+                    </a>
+                    {(canManage || a.uploadedBy.id === currentUserId) && (
+                      <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteAttachment(a.id)}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {canEditExtras && (
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                      onChange={(e) => handleFileChosen(e.target.files?.[0])}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? <Loader2 className="animate-spin" /> : <Paperclip />}
+                      Attach file
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 

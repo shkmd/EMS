@@ -45,6 +45,7 @@ export function TaskListView({
   assignableEmployees,
   canManage,
   currentEmployeeId,
+  currentUserId,
   initialOpenTaskId,
 }: {
   projectId: string
@@ -52,6 +53,7 @@ export function TaskListView({
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
+  currentUserId: string
   initialOpenTaskId?: string
 }) {
   const [tasks, setTasks] = useState(initialTasks)
@@ -249,6 +251,7 @@ export function TaskListView({
         assignableEmployees={assignableEmployees}
         canManage={canManage}
         currentEmployeeId={currentEmployeeId}
+        currentUserId={currentUserId}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onTaskSaved={refresh}

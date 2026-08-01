@@ -45,3 +45,18 @@ export const taskCommentSchema = z.object({
   body: z.string().min(1, "Comment can't be empty").max(4000),
 })
 export type TaskCommentInput = z.infer<typeof taskCommentSchema>
+
+export const checklistItemCreateSchema = z.object({
+  text: z.string().min(1, "Item can't be empty").max(300),
+})
+export type ChecklistItemCreateInput = z.infer<typeof checklistItemCreateSchema>
+
+export const checklistItemUpdateSchema = z.object({
+  isDone: z.boolean(),
+})
+export type ChecklistItemUpdateInput = z.infer<typeof checklistItemUpdateSchema>
+
+export const createSubtaskSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+})
+export type CreateSubtaskInput = z.infer<typeof createSubtaskSchema>

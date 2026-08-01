@@ -40,12 +40,14 @@ export function TaskGanttView({
   assignableEmployees,
   canManage,
   currentEmployeeId,
+  currentUserId,
 }: {
   projectId: string
   initialTasks: TaskItem[]
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
+  currentUserId: string
 }) {
   const [tasks, setTasks] = useState(initialTasks)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
@@ -253,6 +255,7 @@ export function TaskGanttView({
         assignableEmployees={assignableEmployees}
         canManage={canManage}
         currentEmployeeId={currentEmployeeId}
+        currentUserId={currentUserId}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onTaskSaved={refresh}

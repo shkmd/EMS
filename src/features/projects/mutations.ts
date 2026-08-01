@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
+import { assertAllowedFile, deleteUploadedFile, saveUploadedFile, ALLOWED_DOCUMENT_MIME_TYPES, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageProjects, isTaskAssignee } from "@/features/projects/authorization"
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/features/projects/lib/labels"
@@ -15,12 +16,22 @@ import type {
   TaskStatusUpdateInput,
   ReorderTasksInput,
   TaskCommentInput,
+  ChecklistItemCreateInput,
+  ChecklistItemUpdateInput,
+  CreateSubtaskInput,
 } from "@/features/projects/schemas"
+
+const ALLOWED_ATTACHMENT_MIME_TYPES = [...new Set([...ALLOWED_DOCUMENT_MIME_TYPES, ...ALLOWED_PHOTO_MIME_TYPES])]
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
 function assertCanManage(viewer: AccessTokenPayload) {
   if (!canManageProjects(viewer.role)) throw new ForbiddenError()
+}
+
+/** Manager, or the task's own assignee — the same boundary as the self-service status update. */
+function assertCanEditTask(viewer: AccessTokenPayload, task: { assignees: { employeeId: string }[] }) {
+  if (!canManageProjects(viewer.role) && !isTaskAssignee(viewer.employeeId, task)) throw new ForbiddenError()
 }
 
 // ---------- Notifications & activity log ----------
@@ -325,4 +336,105 @@ export async function addTaskComment(taskId: string, input: TaskCommentInput, vi
   await notifyTaskParticipants(task, viewer.sub, "New comment", `New comment on "${task.title}": ${preview}`)
 
   return comment
+}
+
+// ---------- Checklist ----------
+
+async function requireTaskForEdit(taskId: string, viewer: AccessTokenPayload) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { assignees: { select: { employeeId: true } } },
+  })
+  if (!task) throw new NotFoundError("Task not found")
+  assertCanEditTask(viewer, task)
+  return task
+}
+
+export async function addChecklistItem(taskId: string, input: ChecklistItemCreateInput, viewer: AccessTokenPayload) {
+  await requireTaskForEdit(taskId, viewer)
+
+  const maxPosition = await prisma.taskChecklistItem.aggregate({ where: { taskId }, _max: { position: true } })
+  return prisma.taskChecklistItem.create({
+    data: { taskId, text: input.text, position: (maxPosition._max.position ?? -1) + 1 },
+  })
+}
+
+export async function updateChecklistItem(id: string, input: ChecklistItemUpdateInput, viewer: AccessTokenPayload) {
+  const item = await prisma.taskChecklistItem.findUnique({ where: { id } })
+  if (!item) throw new NotFoundError("Checklist item not found")
+  await requireTaskForEdit(item.taskId, viewer)
+
+  return prisma.taskChecklistItem.update({ where: { id }, data: { isDone: input.isDone } })
+}
+
+export async function deleteChecklistItem(id: string, viewer: AccessTokenPayload) {
+  const item = await prisma.taskChecklistItem.findUnique({ where: { id } })
+  if (!item) throw new NotFoundError("Checklist item not found")
+  await requireTaskForEdit(item.taskId, viewer)
+
+  await prisma.taskChecklistItem.delete({ where: { id } })
+}
+
+// ---------- Subtasks ----------
+
+/** Manager-only, lightweight quick-add — single level (a subtask can't itself have subtasks). */
+export async function createSubtask(parentTaskId: string, input: CreateSubtaskInput, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  const parent = await prisma.task.findUnique({ where: { id: parentTaskId }, select: { id: true, projectId: true, parentTaskId: true } })
+  if (!parent) throw new NotFoundError("Task not found")
+  if (parent.parentTaskId) throw new ValidationError("Subtasks can't have their own subtasks")
+
+  const subtask = await prisma.task.create({
+    data: {
+      projectId: parent.projectId,
+      parentTaskId: parent.id,
+      title: input.title,
+      createdById: viewer.sub,
+    },
+  })
+
+  await recordAuditLog({ userId: viewer.sub, action: "SUBTASK_CREATED", entityType: "Task", entityId: subtask.id, ...meta })
+  await logActivity(parentTaskId, viewer.sub, `added a subtask: "${subtask.title}"`)
+
+  return subtask
+}
+
+// Deleting a subtask reuses deleteTask below — a subtask is just a Task row,
+// so the existing manager-only delete-by-id endpoint already covers it.
+
+// ---------- Attachments ----------
+
+export async function addTaskAttachment(taskId: string, file: File, viewer: AccessTokenPayload) {
+  const task = await requireTaskForEdit(taskId, viewer)
+
+  assertAllowedFile(file, ALLOWED_ATTACHMENT_MIME_TYPES)
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { relativePath } = await saveUploadedFile(buffer, `tasks/${taskId}`, file.name)
+
+  const attachment = await prisma.taskAttachment.create({
+    data: {
+      taskId,
+      uploadedById: viewer.sub,
+      fileUrl: relativePath,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    },
+  })
+
+  await logActivity(taskId, viewer.sub, `attached "${file.name}"`)
+  await notifyTaskParticipants(task, viewer.sub, "New attachment", `"${file.name}" was attached to "${task.title}"`)
+
+  return attachment
+}
+
+export async function deleteTaskAttachment(id: string, viewer: AccessTokenPayload) {
+  const attachment = await prisma.taskAttachment.findUnique({ where: { id } })
+  if (!attachment) throw new NotFoundError("Attachment not found")
+
+  if (!canManageProjects(viewer.role) && attachment.uploadedById !== viewer.sub) throw new ForbiddenError()
+
+  await prisma.taskAttachment.delete({ where: { id } })
+  await deleteUploadedFile(attachment.fileUrl)
 }

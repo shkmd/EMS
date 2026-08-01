@@ -2,7 +2,7 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { NotFoundError } from "@/lib/errors"
-import type { TaskFeedItem, TaskParticipantRef } from "@/features/projects/lib/types"
+import type { TaskExtras, TaskFeedItem, TaskParticipantRef } from "@/features/projects/lib/types"
 
 const assigneeSelect = {
   employee: { select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true } },
@@ -76,7 +76,7 @@ export async function listProjectTasks(projectId: string) {
   if (!project) throw new NotFoundError("Project not found")
 
   const tasks = await prisma.task.findMany({
-    where: { projectId },
+    where: { projectId, parentTaskId: null },
     include: { assignees: { select: assigneeSelect } },
     orderBy: [{ status: "asc" }, { position: "asc" }, { createdAt: "asc" }],
   })
@@ -156,6 +156,45 @@ export async function getTaskFeed(taskId: string): Promise<TaskFeedItem[]> {
   ]
 
   return feed.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+/** Checklist, attachments, and subtasks for a task's detail panel — fetched together in one call. */
+export async function getTaskExtras(taskId: string): Promise<TaskExtras> {
+  const [checklistItems, attachments, subtasks] = await Promise.all([
+    prisma.taskChecklistItem.findMany({
+      where: { taskId },
+      orderBy: { position: "asc" },
+      select: { id: true, text: true, isDone: true, position: true },
+    }),
+    prisma.taskAttachment.findMany({
+      where: { taskId },
+      include: { uploadedBy: { select: participantSelect } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.task.findMany({
+      where: { parentTaskId: taskId },
+      include: { assignees: { select: assigneeSelect } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ])
+
+  return {
+    checklistItems,
+    attachments: attachments.map((a) => ({
+      id: a.id,
+      fileName: a.fileName,
+      fileType: a.fileType,
+      fileSize: a.fileSize,
+      createdAt: a.createdAt.toISOString(),
+      uploadedBy: toParticipantRef(a.uploadedBy),
+    })),
+    subtasks: subtasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      assignees: t.assignees.map(toAssigneeRef),
+    })),
+  }
 }
 
 /** Active employees selectable as task assignees. */

@@ -66,6 +66,7 @@ export default async function ProjectDetailPage({
             assignableEmployees={employees}
             canManage={canManage}
             currentEmployeeId={session.employeeId}
+            currentUserId={session.sub}
             initialOpenTaskId={openTaskId}
           />
         </TabsContent>
@@ -76,6 +77,7 @@ export default async function ProjectDetailPage({
             assignableEmployees={employees}
             canManage={canManage}
             currentEmployeeId={session.employeeId}
+            currentUserId={session.sub}
           />
         </TabsContent>
         <TabsContent value="gantt">
@@ -85,6 +87,7 @@ export default async function ProjectDetailPage({
             assignableEmployees={employees}
             canManage={canManage}
             currentEmployeeId={session.employeeId}
+            currentUserId={session.sub}
           />
         </TabsContent>
       </Tabs>

@@ -41,3 +41,32 @@ export type TaskParticipantRef = {
 export type TaskFeedItem =
   | { kind: "comment"; id: string; createdAt: string; body: string; author: TaskParticipantRef }
   | { kind: "activity"; id: string; createdAt: string; message: string; actor: TaskParticipantRef }
+
+export type ChecklistItem = {
+  id: string
+  text: string
+  isDone: boolean
+  position: number
+}
+
+export type TaskAttachmentItem = {
+  id: string
+  fileName: string
+  fileType: string
+  fileSize: number
+  createdAt: string
+  uploadedBy: TaskParticipantRef
+}
+
+export type SubtaskItem = {
+  id: string
+  title: string
+  status: string
+  assignees: AssigneeRef[]
+}
+
+export type TaskExtras = {
+  checklistItems: ChecklistItem[]
+  attachments: TaskAttachmentItem[]
+  subtasks: SubtaskItem[]
+}
