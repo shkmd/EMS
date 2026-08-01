@@ -3,13 +3,10 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireSession } from "@/features/auth/session";
 import { canManageProjects } from "@/features/projects/authorization";
 import { getProject, listProjectTasks, listAssignableEmployees } from "@/features/projects/queries";
-import { TaskListView } from "@/features/projects/components/task-list-view";
-import { TaskBoardView } from "@/features/projects/components/task-board-view";
-import { TaskGanttView } from "@/features/projects/components/task-gantt-view";
+import { ProjectTasksWorkspace } from "@/features/projects/components/project-tasks-workspace";
 
 export const metadata: Metadata = { title: "Project | EMS" };
 
@@ -53,44 +50,15 @@ export default async function ProjectDetailPage({
         {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
       </div>
 
-      <Tabs defaultValue="list">
-        <TabsList>
-          <TabsTrigger value="list">List</TabsTrigger>
-          <TabsTrigger value="board">Board</TabsTrigger>
-          <TabsTrigger value="gantt">Gantt</TabsTrigger>
-        </TabsList>
-        <TabsContent value="list">
-          <TaskListView
-            projectId={project.id}
-            initialTasks={tasks}
-            assignableEmployees={employees}
-            canManage={canManage}
-            currentEmployeeId={session.employeeId}
-            currentUserId={session.sub}
-            initialOpenTaskId={openTaskId}
-          />
-        </TabsContent>
-        <TabsContent value="board">
-          <TaskBoardView
-            projectId={project.id}
-            initialTasks={tasks}
-            assignableEmployees={employees}
-            canManage={canManage}
-            currentEmployeeId={session.employeeId}
-            currentUserId={session.sub}
-          />
-        </TabsContent>
-        <TabsContent value="gantt">
-          <TaskGanttView
-            projectId={project.id}
-            initialTasks={tasks}
-            assignableEmployees={employees}
-            canManage={canManage}
-            currentEmployeeId={session.employeeId}
-            currentUserId={session.sub}
-          />
-        </TabsContent>
-      </Tabs>
+      <ProjectTasksWorkspace
+        projectId={project.id}
+        initialTasks={tasks}
+        assignableEmployees={employees}
+        canManage={canManage}
+        currentEmployeeId={session.employeeId}
+        currentUserId={session.sub}
+        initialOpenTaskId={openTaskId}
+      />
     </div>
   );
 }

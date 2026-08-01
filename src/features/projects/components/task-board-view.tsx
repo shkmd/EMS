@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type Dispatch, type SetStateAction } from "react"
 import {
   DndContext,
   PointerSensor,
@@ -62,28 +62,32 @@ function Column({ status, count, children }: { status: string; count: number; ch
 
 export function TaskBoardView({
   projectId,
-  initialTasks,
+  tasks,
+  setTasks,
+  refresh,
   assignableEmployees,
   canManage,
   currentEmployeeId,
   currentUserId,
 }: {
   projectId: string
-  initialTasks: TaskItem[]
+  tasks: TaskItem[]
+  setTasks: Dispatch<SetStateAction<TaskItem[]>>
+  refresh: () => Promise<void>
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
   currentUserId: string
 }) {
-  const [tasks, setTasks] = useState(initialTasks)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const detailTarget = tasks.find((t) => t.id === detailTaskId) ?? null
 
   function openDetail(task: TaskItem) {
-    setDetailTarget(task)
+    setDetailTaskId(task.id)
     setDetailOpen(true)
   }
 
@@ -102,17 +106,6 @@ export function TaskBoardView({
       body: { status, orderedTaskIds: orderedIds },
     })
     if (!result.success) toast.error(result.error.message)
-  }
-
-  async function refresh() {
-    const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) {
-      setTasks(result.data.tasks)
-      if (detailTarget) {
-        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
-        if (updated) setDetailTarget(updated)
-      }
-    }
   }
 
   async function handleStatusChange(task: TaskItem, status: string) {

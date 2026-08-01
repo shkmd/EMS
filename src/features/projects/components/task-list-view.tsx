@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react"
 import { format, isBefore, startOfToday } from "date-fns"
 import { toast } from "sonner"
 import { MoreHorizontal, Plus } from "lucide-react"
@@ -41,7 +41,9 @@ import type { AssigneeRef, TaskItem } from "@/features/projects/lib/types"
 
 export function TaskListView({
   projectId,
-  initialTasks,
+  tasks,
+  setTasks,
+  refresh,
   assignableEmployees,
   canManage,
   currentEmployeeId,
@@ -49,42 +51,32 @@ export function TaskListView({
   initialOpenTaskId,
 }: {
   projectId: string
-  initialTasks: TaskItem[]
+  tasks: TaskItem[]
+  setTasks: Dispatch<SetStateAction<TaskItem[]>>
+  refresh: () => Promise<void>
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
   currentUserId: string
   initialOpenTaskId?: string
 }) {
-  const [tasks, setTasks] = useState(initialTasks)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TaskItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const today = startOfToday()
+  const detailTarget = tasks.find((t) => t.id === detailTaskId) ?? null
 
   useEffect(() => {
     if (!initialOpenTaskId) return
-    const match = initialTasks.find((t) => t.id === initialOpenTaskId)
-    if (match) {
-      setDetailTarget(match)
+    if (tasks.some((t) => t.id === initialOpenTaskId)) {
+      setDetailTaskId(initialOpenTaskId)
       setDetailOpen(true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  async function refresh() {
-    const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) {
-      setTasks(result.data.tasks)
-      if (detailTarget) {
-        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
-        if (updated) setDetailTarget(updated)
-      }
-    }
-  }
 
   function canChangeStatus(task: TaskItem) {
     return canManage || (currentEmployeeId !== null && task.assignees.some((a) => a.id === currentEmployeeId))
@@ -164,7 +156,7 @@ export function TaskListView({
                       <button
                         className="min-w-40 flex-1 cursor-pointer text-left"
                         onClick={() => {
-                          setDetailTarget(task)
+                          setDetailTaskId(task.id)
                           setDetailOpen(true)
                         }}
                       >

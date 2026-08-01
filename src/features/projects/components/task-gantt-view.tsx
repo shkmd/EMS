@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type Dispatch, type SetStateAction } from "react"
 import {
   addDays,
   differenceInCalendarDays,
@@ -16,7 +16,6 @@ import { Plus } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { apiFetch } from "@/lib/api-client"
 import { initials } from "@/features/messaging/lib/initials"
 import { TaskFormDialog } from "@/features/projects/components/task-form-dialog"
 import { TaskDetailDialog } from "@/features/projects/components/task-detail-dialog"
@@ -36,39 +35,31 @@ function effectiveEnd(task: TaskItem) {
 
 export function TaskGanttView({
   projectId,
-  initialTasks,
+  tasks,
+  refresh,
   assignableEmployees,
   canManage,
   currentEmployeeId,
   currentUserId,
 }: {
   projectId: string
-  initialTasks: TaskItem[]
+  tasks: TaskItem[]
+  setTasks: Dispatch<SetStateAction<TaskItem[]>>
+  refresh: () => Promise<void>
   assignableEmployees: AssigneeRef[]
   canManage: boolean
   currentEmployeeId: string | null
   currentUserId: string
 }) {
-  const [tasks, setTasks] = useState(initialTasks)
   const [editTarget, setEditTarget] = useState<TaskItem | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [detailTarget, setDetailTarget] = useState<TaskItem | null>(null)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const detailTarget = tasks.find((t) => t.id === detailTaskId) ?? null
 
   function openDetail(task: TaskItem) {
-    setDetailTarget(task)
+    setDetailTaskId(task.id)
     setDetailOpen(true)
-  }
-
-  async function refresh() {
-    const result = await apiFetch<{ tasks: TaskItem[] }>(`/api/projects/${projectId}/tasks`)
-    if (result.success) {
-      setTasks(result.data.tasks)
-      if (detailTarget) {
-        const updated = result.data.tasks.find((t) => t.id === detailTarget.id)
-        if (updated) setDetailTarget(updated)
-      }
-    }
   }
 
   const scheduled = tasks
