@@ -358,6 +358,28 @@ export function CallProvider({
     const invite = stateRef.current.incoming
     if (!invite) return
 
+    // startCall() gets the conversation's participant list handed to it
+    // directly by the "Call" button (which already has it), so the caller
+    // always has names/photos to render remote tiles with. acceptCall()
+    // has no such source — the invite signal only carries fromUserId — so
+    // without fetching it here, connectedUserIds ends up correct but
+    // state.participants stays the empty map from IDLE_STATE, and the
+    // remote tile lookup silently comes up empty and gets filtered out.
+    // That's exactly what looked like "video/audio connects but the UI
+    // never shows the other person": the WebRTC side was fine the whole
+    // time, only the display metadata was missing.
+    let participants = new Map<string, ParticipantRef>()
+    try {
+      const result = await apiFetch<{ conversation: { participants: ParticipantRef[] } }>(
+        `/api/messages/conversations/${invite.conversationId}`
+      )
+      if (result.success) {
+        participants = new Map(result.data.conversation.participants.map((p) => [p.id, p]))
+      }
+    } catch (error) {
+      console.warn("[call] couldn't fetch conversation participants for accept:", error)
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: invite.withVideo })
       localStreamRef.current = stream
@@ -376,6 +398,7 @@ export function CallProvider({
       conversationId: invite.conversationId,
       withVideo: invite.withVideo,
       incoming: null,
+      participants,
       connectedUserIds: [currentUserId],
     }))
     sendSignal(invite.conversationId, { kind: "accept", callId: invite.callId })
@@ -549,10 +572,13 @@ export function CallProvider({
     return () => source.close()
   }, [handleSignal])
 
+  // Falls back to a generic placeholder instead of dropping a connected
+  // peer entirely if their ParticipantRef is missing for any reason — a
+  // stale/unnamed tile is a much smaller problem than a working audio/video
+  // connection that silently never appears anywhere in the UI.
   const remoteParticipants = state.connectedUserIds
     .filter((id) => id !== currentUserId)
-    .map((id) => state.participants.get(id))
-    .filter((p): p is ParticipantRef => !!p)
+    .map((id): ParticipantRef => state.participants.get(id) ?? { id, name: "Unknown", profilePhotoUrl: null, employeeId: null })
 
   return (
     <CallContext.Provider value={{ state, startCall, acceptCall, declineCall, endCall, toggleMic, toggleCamera }}>
