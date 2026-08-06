@@ -1,5 +1,16 @@
 import { z } from "zod"
 
+// Docker Compose's `${VAR:-}` substitution passes an env var through as an
+// empty string when it's unset in .env, not as a genuinely absent key —
+// which fails z.string().min(n).optional() (empty string still "is
+// present", just too short) even though the intent was "not configured".
+// Treat "" the same as absent for every optional secret below, or an
+// unconfigured optional feature crashes EVERY request that calls getEnv(),
+// not just the feature that needed it (this took down login in production).
+function optionalEnvString(schema: z.ZodString) {
+  return z.preprocess((v) => (v === "" ? undefined : v), schema.optional())
+}
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 
@@ -31,14 +42,14 @@ const envSchema = z.object({
 
   // Shared secret the biometric-device bridge script authenticates with
   // (machine-to-machine — no user session available on an unattended PC).
-  BIOMETRIC_SYNC_API_KEY: z.string().min(16).optional(),
+  BIOMETRIC_SYNC_API_KEY: optionalEnvString(z.string().min(16)),
 
   // TURN server (coturn) for WebRTC calling — TURN_SECRET must match
   // coturn's static-auth-secret exactly; TURN_HOST is the public
   // hostname/IP it's reachable at. Both optional: calling is disabled
   // (no ICE servers returned) if unset.
-  TURN_SECRET: z.string().min(16).optional(),
-  TURN_HOST: z.string().optional(),
+  TURN_SECRET: optionalEnvString(z.string().min(16)),
+  TURN_HOST: optionalEnvString(z.string()),
 })
 
 type Env = z.infer<typeof envSchema>
