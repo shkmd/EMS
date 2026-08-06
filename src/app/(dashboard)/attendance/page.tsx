@@ -84,7 +84,7 @@ export default async function AttendancePage({
 
         {showTeamTab && (
           <TabsContent value="team" className="mt-4">
-            <TeamAttendanceTable />
+            <TeamAttendanceTable canManage={canManage} employees={employeeOptions} />
           </TabsContent>
         )}
 

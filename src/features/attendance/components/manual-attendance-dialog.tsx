@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -24,20 +24,48 @@ import { apiFetch } from "@/lib/api-client"
 import { manualAttendanceSchema, type ManualAttendanceInput, attendanceStatusValues } from "@/features/attendance/schemas"
 import { ATTENDANCE_STATUS_LABELS } from "@/features/attendance/lib/status"
 
+const emptyValues: ManualAttendanceInput = {
+  employeeId: "",
+  date: "",
+  status: "PRESENT",
+  checkIn: "",
+  checkOut: "",
+  notes: "",
+}
+
 export function ManualAttendanceDialog({
   employees,
   onSaved,
+  trigger,
+  defaultValues,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
 }: {
   employees: { id: string; label: string }[]
   onSaved: () => void
+  /** Pass `null` to suppress the built-in "+ Manual Entry" button entirely (fully controlled via `open`/`onOpenChange`). */
+  trigger?: ReactNode | null
+  defaultValues?: Partial<ManualAttendanceInput>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = setControlledOpen ?? setUncontrolledOpen
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<ManualAttendanceInput>({
     resolver: zodResolver(manualAttendanceSchema),
-    defaultValues: { employeeId: "", date: "", status: "PRESENT", checkIn: "", checkOut: "", notes: "" },
+    defaultValues: { ...emptyValues, ...defaultValues },
   })
+
+  // Re-populate the form whenever the dialog opens, since defaultValues can
+  // change per-employee (e.g. a "correct this row" trigger) while this
+  // component instance stays mounted.
+  useEffect(() => {
+    if (open) form.reset({ ...emptyValues, ...defaultValues })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   async function onSubmit(values: ManualAttendanceInput) {
     setIsSubmitting(true)
@@ -49,7 +77,6 @@ export function ManualAttendanceDialog({
       }
       toast.success("Attendance saved")
       setOpen(false)
-      form.reset({ employeeId: "", date: "", status: "PRESENT", checkIn: "", checkOut: "", notes: "" })
       onSaved()
     } catch {
       toast.error("Something went wrong. Please try again.")
@@ -60,11 +87,15 @@ export function ManualAttendanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Plus /> Manual Entry
-        </Button>
-      </DialogTrigger>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline">
+              <Plus /> Manual Entry
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add/edit attendance</DialogTitle>

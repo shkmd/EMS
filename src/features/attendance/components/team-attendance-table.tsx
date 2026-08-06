@@ -1,14 +1,19 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { format } from "date-fns"
+import { Pencil } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { apiFetch } from "@/lib/api-client"
 import { ATTENDANCE_STATUS_BADGE, ATTENDANCE_STATUS_LABELS } from "@/features/attendance/lib/status"
+import { ManualAttendanceDialog } from "@/features/attendance/components/manual-attendance-dialog"
+import type { ManualAttendanceInput } from "@/features/attendance/schemas"
 
 type TeamMember = {
   id: string
@@ -28,14 +33,40 @@ function formatTime(iso: string | null) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
-export function TeamAttendanceTable() {
-  const [team, setTeam] = useState<TeamMember[] | null>(null)
+function timeInputValue(iso: string | null) {
+  if (!iso) return ""
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
 
-  useEffect(() => {
+export function TeamAttendanceTable({
+  canManage = false,
+  employees = [],
+}: {
+  canManage?: boolean
+  employees?: { id: string; label: string }[]
+}) {
+  const [team, setTeam] = useState<TeamMember[] | null>(null)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+
+  function loadTeam() {
     apiFetch<{ team: TeamMember[] }>("/api/attendance/team").then((result) => {
       if (result.success) setTeam(result.data.team)
     })
-  }, [])
+  }
+
+  useEffect(loadTeam, [])
+
+  const today = format(new Date(), "yyyy-MM-dd")
+  const editingDefaults: Partial<ManualAttendanceInput> | undefined = editingMember
+    ? {
+        employeeId: editingMember.id,
+        date: today,
+        status: (editingMember.today?.status as ManualAttendanceInput["status"]) ?? "PRESENT",
+        checkIn: timeInputValue(editingMember.today?.checkIn ?? null),
+        checkOut: timeInputValue(editingMember.today?.checkOut ?? null),
+      }
+    : undefined
 
   return (
     <Card>
@@ -56,12 +87,13 @@ export function TeamAttendanceTable() {
                   <TableHead>Status</TableHead>
                   <TableHead>Check In</TableHead>
                   <TableHead>Check Out</TableHead>
+                  {canManage && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={canManage ? 6 : 5} className="h-24 text-center text-muted-foreground">
                       No team members found.
                     </TableCell>
                   </TableRow>
@@ -93,6 +125,19 @@ export function TeamAttendanceTable() {
                       </TableCell>
                       <TableCell>{formatTime(member.today?.checkIn ?? null)}</TableCell>
                       <TableCell>{formatTime(member.today?.checkOut ?? null)}</TableCell>
+                      {canManage && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            title={member.today ? "Correct today's attendance" : "Mark attendance"}
+                            onClick={() => setEditingMember(member)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}
@@ -101,6 +146,22 @@ export function TeamAttendanceTable() {
           </div>
         )}
       </CardContent>
+
+      {canManage && (
+        <ManualAttendanceDialog
+          employees={employees}
+          trigger={null}
+          open={!!editingMember}
+          onOpenChange={(next) => {
+            if (!next) setEditingMember(null)
+          }}
+          defaultValues={editingDefaults}
+          onSaved={() => {
+            setEditingMember(null)
+            loadTeam()
+          }}
+        />
+      )}
     </Card>
   )
 }
