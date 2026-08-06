@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { getSession } from "@/features/auth/session";
 import { isMaintenanceModeEnabled } from "@/features/settings/queries";
+import { ActivityTracker } from "@/features/activity/components/activity-tracker";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <SidebarProvider>
+      {session.employeeId && <ActivityTracker />}
       <AppSidebar role={user.role} />
       <SidebarInset>
         <Topbar

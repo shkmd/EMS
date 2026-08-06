@@ -22,6 +22,21 @@ type TeamMember = {
   profilePhotoUrl: string | null
   department: string | null
   today: { status: string; checkIn: string | null; checkOut: string | null } | null
+  screenActivity: { activeSeconds: number; idleSeconds: number; lastSeenAt: string | null } | null
+}
+
+function formatDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+// A tab open but untouched for a while (no heartbeat in the last couple of
+// intervals) means the screen-time numbers are stale, not necessarily that
+// the person just went idle this instant.
+function isRecentlySeen(lastSeenAt: string | null) {
+  if (!lastSeenAt) return false
+  return Date.now() - new Date(lastSeenAt).getTime() < 2 * 60_000
 }
 
 function initials(firstName: string, lastName: string) {
@@ -87,13 +102,14 @@ export function TeamAttendanceTable({
                   <TableHead>Status</TableHead>
                   <TableHead>Check In</TableHead>
                   <TableHead>Check Out</TableHead>
+                  <TableHead>Screen Time</TableHead>
                   {canManage && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 6 : 5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center text-muted-foreground">
                       No team members found.
                     </TableCell>
                   </TableRow>
@@ -125,6 +141,21 @@ export function TeamAttendanceTable({
                       </TableCell>
                       <TableCell>{formatTime(member.today?.checkIn ?? null)}</TableCell>
                       <TableCell>{formatTime(member.today?.checkOut ?? null)}</TableCell>
+                      <TableCell>
+                        {member.screenActivity ? (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            {isRecentlySeen(member.screenActivity.lastSeenAt) && (
+                              <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" title="Active recently" />
+                            )}
+                            <span>
+                              {formatDuration(member.screenActivity.activeSeconds)} active
+                              <span className="text-muted-foreground"> · {formatDuration(member.screenActivity.idleSeconds)} idle</span>
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       {canManage && (
                         <TableCell>
                           <Button

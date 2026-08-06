@@ -68,6 +68,11 @@ export async function listTeamAttendanceToday(viewer: AccessTokenPayload) {
         where: { date: { gte: start, lte: end } },
         take: 1,
       },
+      screenActivities: {
+        where: { date: { gte: start, lte: end } },
+        take: 1,
+        select: { activeSeconds: true, idleSeconds: true, lastSeenAt: true },
+      },
     },
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   })
@@ -79,6 +84,7 @@ export async function listTeamAttendanceToday(viewer: AccessTokenPayload) {
     profilePhotoUrl: e.profilePhotoUrl,
     department: e.department?.name ?? null,
     today: e.attendances[0] ?? null,
+    screenActivity: e.screenActivities[0] ?? null,
   }))
 }
 

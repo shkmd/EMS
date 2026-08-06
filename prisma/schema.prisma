@@ -405,6 +405,7 @@ model Employee {
   notes                  EmployeeNote[]
   timelineEvents         EmployeeTimelineEvent[]
   attendances            Attendance[]
+  screenActivities       ScreenActivity[]
   leaveRequestsMade      LeaveRequest[]          @relation("LeaveApplicant")
   leaveRequestsManaged   LeaveRequest[]          @relation("LeaveManagerApprover")
   leaveRequestsHrManaged LeaveRequest[]          @relation("LeaveHrApprover")
@@ -508,6 +509,29 @@ model AttendanceBreak {
 
   @@index([attendanceId])
   @@map("attendance_breaks")
+}
+
+// Browser-tab activity, not attendance — accumulated from periodic
+// heartbeats sent by the EMS tab while it's open (see
+// features/activity/mutations.ts). Active/idle are self-reported by the
+// client based on mouse/keyboard activity and tab visibility, so this is a
+// "were they interacting with this tab" signal, not a system-wide idle
+// measurement.
+model ScreenActivity {
+  id            String    @id @default(cuid())
+  employeeId    String
+  date          DateTime  @db.Date
+  activeSeconds Int       @default(0)
+  idleSeconds   Int       @default(0)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("screen_activities")
 }
 
 // ============================================================================
