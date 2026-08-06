@@ -42,19 +42,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : user.email.split("@")[0]!;
 
   return (
-    <SidebarProvider>
-      {session.employeeId && <ActivityTracker />}
-      <CallProvider currentUserId={session.sub} currentUserName={displayName} />
-      <AppSidebar role={user.role} />
-      <SidebarInset>
-        <Topbar
-          name={displayName}
-          email={user.email}
-          role={user.role}
-          avatarUrl={user.employee?.profilePhotoUrl}
-        />
-        <main className="flex flex-1 flex-col gap-6 p-6 md:p-8">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <CallProvider currentUserId={session.sub} currentUserName={displayName}>
+      <SidebarProvider>
+        {session.employeeId && <ActivityTracker />}
+        <AppSidebar role={user.role} />
+        <SidebarInset>
+          <Topbar
+            name={displayName}
+            email={user.email}
+            role={user.role}
+            avatarUrl={user.employee?.profilePhotoUrl}
+          />
+          <main className="flex flex-1 flex-col gap-6 p-6 md:p-8">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
+    </CallProvider>
   );
 }

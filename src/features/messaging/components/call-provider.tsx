@@ -104,7 +104,15 @@ function VideoTile({
   )
 }
 
-export function CallProvider({ currentUserId, currentUserName }: { currentUserId: string; currentUserName: string }) {
+export function CallProvider({
+  currentUserId,
+  currentUserName,
+  children,
+}: {
+  currentUserId: string
+  currentUserName: string
+  children: React.ReactNode
+}) {
   const [state, setState] = useState<CallState>(IDLE_STATE)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -373,6 +381,7 @@ export function CallProvider({ currentUserId, currentUserName }: { currentUserId
 
   return (
     <CallContext.Provider value={{ state, startCall, acceptCall, declineCall, endCall, toggleMic, toggleCamera }}>
+      {children}
       {state.status === "incoming" && state.incoming && (
         <div className="fixed top-4 right-4 z-50 w-72 rounded-lg border bg-card p-4 shadow-lg">
           <p className="text-sm font-medium">Incoming {state.incoming.withVideo ? "video" : "voice"} call</p>
