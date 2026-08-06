@@ -9,6 +9,8 @@ import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageAttendance } from "@/features/attendance/authorization"
 import { getWorkingHoursForEmployee } from "@/features/verticals/queries"
+import { getCompanySettings } from "@/features/settings/queries"
+import { zonedTimeToUtc } from "@/lib/timezone"
 import type { ManualAttendanceInput } from "@/features/attendance/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
@@ -171,8 +173,14 @@ export async function upsertManualAttendance(input: ManualAttendanceInput, viewe
   // Do NOT wrap it in date-fns's startOfDay: that recomputes the boundary
   // in local time and can shift it a day off from what was intended.
   const date = new Date(input.date)
-  const checkIn = input.checkIn ? new Date(`${input.date}T${input.checkIn}`) : null
-  const checkOutAt = input.checkOut ? new Date(`${input.date}T${input.checkOut}`) : null
+
+  // checkIn/checkOut are wall-clock "HH:mm" values meant in the company's
+  // configured timezone, not the server's (always UTC in this app's
+  // containers) — parse them accordingly, or a manager in Asia/Kolkata
+  // entering "09:00" ends up with a record reading 14:30 IST.
+  const { timezone } = await getCompanySettings()
+  const checkIn = input.checkIn ? zonedTimeToUtc(input.date, input.checkIn, timezone) : null
+  const checkOutAt = input.checkOut ? zonedTimeToUtc(input.date, input.checkOut, timezone) : null
   const workingMinutes = checkIn && checkOutAt ? Math.max(0, differenceInMinutes(checkOutAt, checkIn)) : 0
 
   const record = await prisma.attendance.upsert({

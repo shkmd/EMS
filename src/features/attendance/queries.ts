@@ -67,6 +67,7 @@ export async function listTeamAttendanceToday(viewer: AccessTokenPayload) {
       attendances: {
         where: { date: { gte: start, lte: end } },
         take: 1,
+        include: { breaks: { orderBy: { breakStart: "asc" } } },
       },
       screenActivities: {
         where: { date: { gte: start, lte: end } },

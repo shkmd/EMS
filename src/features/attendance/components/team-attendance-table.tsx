@@ -15,15 +15,24 @@ import { ATTENDANCE_STATUS_BADGE, ATTENDANCE_STATUS_LABELS } from "@/features/at
 import { ManualAttendanceDialog } from "@/features/attendance/components/manual-attendance-dialog"
 import type { ManualAttendanceInput } from "@/features/attendance/schemas"
 
+type Break = { id: string; breakStart: string; breakEnd: string | null }
 type TeamMember = {
   id: string
   firstName: string
   lastName: string
   profilePhotoUrl: string | null
   department: string | null
-  today: { status: string; checkIn: string | null; checkOut: string | null } | null
+  today: {
+    status: string
+    checkIn: string | null
+    checkOut: string | null
+    breakMinutes: number
+    breaks: Break[]
+  } | null
   screenActivity: { activeSeconds: number; idleSeconds: number; lastSeenAt: string | null } | null
 }
+
+const REFRESH_INTERVAL_MS = 30_000
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60)
@@ -70,7 +79,11 @@ export function TeamAttendanceTable({
     })
   }
 
-  useEffect(loadTeam, [])
+  useEffect(() => {
+    loadTeam()
+    const interval = setInterval(loadTeam, REFRESH_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [])
 
   const today = format(new Date(), "yyyy-MM-dd")
   const editingDefaults: Partial<ManualAttendanceInput> | undefined = editingMember
@@ -102,6 +115,7 @@ export function TeamAttendanceTable({
                   <TableHead>Status</TableHead>
                   <TableHead>Check In</TableHead>
                   <TableHead>Check Out</TableHead>
+                  <TableHead>Break</TableHead>
                   <TableHead>Screen Time</TableHead>
                   {canManage && <TableHead className="w-10" />}
                 </TableRow>
@@ -109,7 +123,7 @@ export function TeamAttendanceTable({
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={canManage ? 8 : 7} className="h-24 text-center text-muted-foreground">
                       No team members found.
                     </TableCell>
                   </TableRow>
@@ -141,6 +155,29 @@ export function TeamAttendanceTable({
                       </TableCell>
                       <TableCell>{formatTime(member.today?.checkIn ?? null)}</TableCell>
                       <TableCell>{formatTime(member.today?.checkOut ?? null)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const openBreak = member.today?.breaks.find((b) => !b.breakEnd)
+                          const breakList = member.today?.breaks
+                            .map((b) => `${formatTime(b.breakStart)} – ${formatTime(b.breakEnd)}`)
+                            .join(", ")
+                          if (openBreak) {
+                            return (
+                              <span className="text-xs text-amber-600 dark:text-amber-500" title={breakList}>
+                                On break since {formatTime(openBreak.breakStart)}
+                              </span>
+                            )
+                          }
+                          if ((member.today?.breakMinutes ?? 0) > 0) {
+                            return (
+                              <span className="text-xs" title={breakList}>
+                                {formatDuration(member.today!.breakMinutes * 60)}
+                              </span>
+                            )
+                          }
+                          return <span className="text-xs text-muted-foreground">—</span>
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {member.screenActivity ? (
                           <div className="flex items-center gap-1.5 text-xs">
