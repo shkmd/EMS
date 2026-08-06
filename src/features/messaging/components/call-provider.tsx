@@ -109,6 +109,34 @@ async function getIceServers(): Promise<RTCIceServer[]> {
   return result.data.iceServers
 }
 
+// A fresh AudioContext created at the moment an invite arrives starts
+// "suspended" on most mobile browsers — audio only plays once the context
+// has been resumed inside a real user gesture, and an incoming call is a
+// network event, not a tap. Instead, prime ONE shared context on the
+// very first tap/keypress anywhere in the app (session-wide, well before
+// any call), so it's already running by the time a ringtone needs it.
+let sharedAudioContext: AudioContext | null = null
+
+function getSharedAudioContext(): AudioContext {
+  if (!sharedAudioContext) sharedAudioContext = new AudioContext()
+  return sharedAudioContext
+}
+
+function primeAudioOnFirstInteraction() {
+  const unlock = () => {
+    const ctx = getSharedAudioContext()
+    if (ctx.state === "suspended") ctx.resume().catch(() => {})
+    window.removeEventListener("pointerdown", unlock)
+    window.removeEventListener("keydown", unlock)
+  }
+  window.addEventListener("pointerdown", unlock, { once: true })
+  window.addEventListener("keydown", unlock, { once: true })
+  return () => {
+    window.removeEventListener("pointerdown", unlock)
+    window.removeEventListener("keydown", unlock)
+  }
+}
+
 /** One short two-tone "brring" pulse, synthesized (no audio asset needed). */
 function playRingtoneTick(ctx: AudioContext) {
   const now = ctx.currentTime
@@ -143,8 +171,17 @@ function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream
-  }, [stream])
+    const el = videoRef.current
+    if (!el || !stream) return
+    el.srcObject = stream
+    // The `autoPlay` attribute alone doesn't surface a blocked-by-browser
+    // failure anywhere — a rejected play() promise just leaves the element
+    // silently paused (remote audio never audible, easy to miss since the
+    // last video frame can still look "live" in a screenshot).
+    el.play().catch((error) => {
+      console.warn(`[call] playback blocked for "${label}" (autoplay policy?):`, error)
+    })
+  }, [stream, label])
 
   return (
     <div
@@ -185,15 +222,19 @@ export function CallProvider({
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map())
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Rings while an invite is waiting on this end. Synthesized via Web Audio
-  // instead of an audio asset — autoplay-blocked until the page has had
-  // some user interaction this session, same as any other audio, so it may
-  // stay silent on the very first page load before any click has happened.
+  // Primes the shared ringtone AudioContext on the first tap/keypress
+  // anywhere in the app, well before any call could arrive.
+  useEffect(() => primeAudioOnFirstInteraction(), [])
+
+  // Rings while an invite is waiting on this end. Reuses the shared,
+  // already-unlocked AudioContext instead of creating (and needing to
+  // unlock) a fresh one at the moment the invite arrives.
   useEffect(() => {
     if (state.status !== "incoming") return
     let ctx: AudioContext | null = null
     try {
-      ctx = new AudioContext()
+      ctx = getSharedAudioContext()
+      if (ctx.state === "suspended") ctx.resume().catch(() => {})
       playRingtoneTick(ctx)
     } catch (error) {
       console.warn("[call] couldn't start ringtone:", error)
@@ -201,10 +242,7 @@ export function CallProvider({
     const interval = setInterval(() => {
       if (ctx) playRingtoneTick(ctx)
     }, 1500)
-    return () => {
-      clearInterval(interval)
-      ctx?.close()
-    }
+    return () => clearInterval(interval)
   }, [state.status])
 
   function sendSignal(conversationId: string, signal: CallSignal) {
