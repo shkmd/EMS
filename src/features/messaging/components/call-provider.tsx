@@ -93,6 +93,16 @@ function describeMediaError(error: unknown): string {
   }
 }
 
+/** Turns a silent hang into a visible error after `ms` — a rejected/thrown
+ * promise surfaces via the toast in handleSignal's catch block; a promise
+ * that just never resolves (e.g. a stuck fetch) previously didn't. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), ms)),
+  ])
+}
+
 async function getIceServers(): Promise<RTCIceServer[]> {
   const result = await apiFetch<{ iceServers: RTCIceServer[] }>("/api/messages/turn-credentials")
   if (!result.success) throw new Error(result.error.message)
@@ -225,6 +235,7 @@ export function CallProvider({
       })
 
       pc.ontrack = (event) => {
+        console.log(`[call] received remote track (${event.track.kind}) from ${remoteUserId}`)
         setRemoteStreams((prev) => {
           const next = new Map(prev)
           next.set(remoteUserId, event.streams[0] ?? new MediaStream([event.track]))
@@ -243,7 +254,23 @@ export function CallProvider({
         }
       }
 
+      // The most useful signal for "signaling finished but no audio/video":
+      // connectionState only reaches "connected" once ICE has actually
+      // found a working path (direct or via TURN relay). Stuck on
+      // "checking" or landing on "failed" means the offer/answer exchange
+      // worked but connectivity itself didn't — a TURN/network issue, not
+      // a signaling bug.
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[call] ICE connection state with ${remoteUserId}: ${pc.iceConnectionState}`)
+      }
+
+      pc.onicecandidateerror = (event) => {
+        const e = event as RTCPeerConnectionIceErrorEvent
+        console.warn(`[call] ICE candidate error with ${remoteUserId}: ${e.errorCode} ${e.errorText} (${e.url ?? "no url"})`)
+      }
+
       pc.onconnectionstatechange = () => {
+        console.log(`[call] connection state with ${remoteUserId}: ${pc.connectionState}`)
         if (pc.connectionState === "failed" || pc.connectionState === "closed") {
           peersRef.current.delete(remoteUserId)
           setRemoteStreams((prev) => {
@@ -386,26 +413,37 @@ export function CallProvider({
 
         if (signal.kind === "accept") {
           console.log(`[call] ${fromUserId} accepted — creating offer`)
-          const iceServers = await getIceServers()
+          const iceServers = await withTimeout(getIceServers(), 8000, "ICE servers")
+          console.log(`[call] got ${iceServers.length} ICE server(s)`)
           const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
           setState((prev) => ({ ...prev, status: "in-call", connectedUserIds: [...prev.connectedUserIds, fromUserId] }))
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
+          const offer = await withTimeout(pc.createOffer(), 8000, "createOffer")
+          console.log(`[call] offer created`)
+          await withTimeout(pc.setLocalDescription(offer), 8000, "setLocalDescription(offer)")
+          console.log(`[call] local description set — sending offer to ${fromUserId}`)
           sendSignal(conversationId, { kind: "offer", callId: current.callId!, toUserId: fromUserId, sdp: offer })
           return
         }
 
         if (signal.kind === "offer") {
           console.log(`[call] received offer from ${fromUserId} — answering`)
-          const iceServers = await getIceServers()
+          const iceServers = await withTimeout(getIceServers(), 8000, "ICE servers")
+          console.log(`[call] got ${iceServers.length} ICE server(s)`)
           const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
+          await withTimeout(
+            pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit)),
+            8000,
+            "setRemoteDescription(offer)"
+          )
+          console.log(`[call] remote description (offer) set`)
           for (const c of pendingCandidatesRef.current.get(fromUserId) ?? []) {
             await pc.addIceCandidate(new RTCIceCandidate(c))
           }
           pendingCandidatesRef.current.delete(fromUserId)
-          const answer = await pc.createAnswer()
-          await pc.setLocalDescription(answer)
+          const answer = await withTimeout(pc.createAnswer(), 8000, "createAnswer")
+          console.log(`[call] answer created`)
+          await withTimeout(pc.setLocalDescription(answer), 8000, "setLocalDescription(answer)")
+          console.log(`[call] local description set — updating state and sending answer to ${fromUserId}`)
           setState((prev) => ({
             ...prev,
             status: "in-call",
@@ -414,13 +452,23 @@ export function CallProvider({
               : [...prev.connectedUserIds, fromUserId],
           }))
           sendSignal(conversationId, { kind: "answer", callId: current.callId!, toUserId: fromUserId, sdp: answer })
+          console.log(`[call] answer sent to ${fromUserId}`)
           return
         }
 
         if (signal.kind === "answer") {
           console.log(`[call] received answer from ${fromUserId}`)
           const pc = peersRef.current.get(fromUserId)
-          if (pc) await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
+          if (pc) {
+            await withTimeout(
+              pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit)),
+              8000,
+              "setRemoteDescription(answer)"
+            )
+            console.log(`[call] remote description (answer) set for ${fromUserId} — connection should complete shortly`)
+          } else {
+            console.warn(`[call] received answer from ${fromUserId} but no matching peer connection exists`)
+          }
           return
         }
 
