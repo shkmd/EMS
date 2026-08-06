@@ -29,8 +29,12 @@ const nextConfig: NextConfig = {
           // Sends the full referrer only to our own origin; cross-origin
           // navigations only get the origin, not the full path/query.
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          // Disables browser features this app never uses.
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          // Disables browser features this app never uses. camera/microphone
+          // are scoped to our own origin (not blanket-disabled) for WebRTC
+          // calling in Messages — a blanket `camera=()` here overrides any
+          // per-site permission the user grants in their browser, which is
+          // exactly what silently broke calling before this was narrowed.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(), payment=()" },
           // HSTS: only meaningful once actually served over HTTPS (e.g.
           // behind a TLS-terminating proxy in production); harmless as a
           // no-op over plain HTTP in local dev.
