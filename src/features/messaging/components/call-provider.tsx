@@ -67,6 +67,31 @@ export function useCall() {
   return ctx
 }
 
+/** Maps getUserMedia's DOMException names to a message that actually says
+ * what's wrong, instead of a generic "check permissions" that's equally
+ * true (and equally useless) whether the real cause is a denied
+ * permission, no camera on the device, or the camera being held by
+ * another app. */
+function describeMediaError(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : null
+  switch (name) {
+    case "NotAllowedError":
+      return "Camera/microphone access was denied. Allow it for this site, then try again."
+    case "NotFoundError":
+      return "No camera or microphone was found on this device."
+    case "NotReadableError":
+      return "Your camera or microphone is already in use by another app or browser tab."
+    case "OverconstrainedError":
+      return "This device doesn't support the requested camera/microphone settings."
+    case "SecurityError":
+      return "Camera/microphone access is blocked on this page (insecure context or permissions policy)."
+    default: {
+      const detail = error instanceof Error ? error.message : String(error)
+      return `Couldn't access your microphone/camera${name ? ` (${name})` : ""}: ${detail}`
+    }
+  }
+}
+
 async function getIceServers(): Promise<RTCIceServer[]> {
   const result = await apiFetch<{ iceServers: RTCIceServer[] }>("/api/messages/turn-credentials")
   if (!result.success) throw new Error(result.error.message)
@@ -195,8 +220,8 @@ export function CallProvider({
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo })
         localStreamRef.current = stream
         setLocalStream(stream)
-      } catch {
-        toast.error("Couldn't access your microphone/camera. Check browser permissions.")
+      } catch (error) {
+        toast.error(describeMediaError(error))
         return
       }
 
@@ -222,8 +247,8 @@ export function CallProvider({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: invite.withVideo })
       localStreamRef.current = stream
       setLocalStream(stream)
-    } catch {
-      toast.error("Couldn't access your microphone/camera. Check browser permissions.")
+    } catch (error) {
+      toast.error(describeMediaError(error))
       sendSignal(invite.conversationId, { kind: "decline", callId: invite.callId })
       setState(IDLE_STATE)
       return
