@@ -28,6 +28,10 @@ const envSchema = z.object({
 
   SEED_SUPER_ADMIN_EMAIL: z.email().default("admin@ems.local"),
   SEED_SUPER_ADMIN_PASSWORD: z.string().min(8).default("ChangeMe123!"),
+
+  // Shared secret the biometric-device bridge script authenticates with
+  // (machine-to-machine — no user session available on an unattended PC).
+  BIOMETRIC_SYNC_API_KEY: z.string().min(16).optional(),
 })
 
 type Env = z.infer<typeof envSchema>

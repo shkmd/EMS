@@ -49,6 +49,7 @@ function toEmployeeData(input: EmployeeFormInput) {
     confirmationDate: input.confirmationDate ? new Date(input.confirmationDate) : null,
     workLocation: orNull(input.workLocation),
     shift: orNull(input.shift),
+    biometricId: orNull(input.biometricId),
     status: input.status,
     basicSalary: orNullNumber(input.basicSalary),
     allowances: orNullNumber(input.allowances),

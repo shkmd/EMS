@@ -369,6 +369,10 @@ model Employee {
   shift                 String?
   status                EmployeeStatus @default(ACTIVE)
 
+  // Biometric device mapping (e.g. eSSL eTimeTrackLite EmployeeCode) — used
+  // to auto-record attendance from fingerprint punches.
+  biometricId String? @unique
+
   // Salary
   basicSalary   Decimal? @db.Decimal(12, 2)
   allowances    Decimal? @db.Decimal(12, 2)

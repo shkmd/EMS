@@ -655,6 +655,19 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
                 />
                 <FormField
                   control={form.control}
+                  name="biometricId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Biometric ID</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Device employee code" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="status"
                   render={({ field }) => (
                     <FormItem>

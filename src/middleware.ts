@@ -12,6 +12,10 @@ const PUBLIC_API_PATHS = [
   "/api/auth/refresh",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  // Not actually public — called unattended by the office biometric bridge
+  // script, which has no session cookie. Authenticated by its own shared
+  // API-key check (see assertValidApiKey in the route handler) instead.
+  "/api/integrations/biometric/punch",
 ]
 
 function isPublicPath(pathname: string) {

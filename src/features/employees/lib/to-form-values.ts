@@ -29,6 +29,7 @@ type EmployeeRecord = {
   confirmationDate: Date | null
   workLocation: string | null
   shift: string | null
+  biometricId: string | null
   status: string
   basicSalary: { toString(): string } | null
   allowances: { toString(): string } | null
@@ -76,6 +77,7 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormInpu
     confirmationDate: dateInput(employee.confirmationDate),
     workLocation: employee.workLocation ?? "",
     shift: employee.shift ?? "",
+    biometricId: employee.biometricId ?? "",
     status: employee.status as EmployeeFormInput["status"],
     basicSalary: employee.basicSalary?.toString() ?? "",
     allowances: employee.allowances?.toString() ?? "",

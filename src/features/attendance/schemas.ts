@@ -38,3 +38,13 @@ export const manualAttendanceSchema = z.object({
   notes: z.string().optional(),
 })
 export type ManualAttendanceInput = z.infer<typeof manualAttendanceSchema>
+
+// Payload the office biometric-device bridge script POSTs per fingerprint
+// punch. `biometricId` maps to Employee.biometricId (an HR-configured
+// mapping to the device's own employee code) — not an EMS employee id.
+export const biometricPunchSchema = z.object({
+  biometricId: z.string().min(1, "biometricId is required"),
+  direction: z.enum(["IN", "OUT"]),
+  punchTime: z.iso.datetime({ offset: true }),
+})
+export type BiometricPunchInput = z.infer<typeof biometricPunchSchema>

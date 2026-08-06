@@ -57,6 +57,7 @@ export const employeeFormSchema = z.object({
   confirmationDate: optionalString,
   workLocation: optionalString,
   shift: optionalString,
+  biometricId: optionalString,
   status: z.enum(["ACTIVE", "INACTIVE", "ON_LEAVE", "TERMINATED"]),
 
   // Salary
