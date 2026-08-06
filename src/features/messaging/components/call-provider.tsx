@@ -2,11 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react"
+import { Maximize2, Mic, Minimize2, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api-client"
+import { cn } from "@/lib/utils"
 import { initials } from "@/features/messaging/lib/initials"
 import type { CallSignal, RealtimeEvent } from "@/features/messaging/lib/realtime"
 import type { ParticipantRef } from "@/features/messaging/lib/types"
@@ -98,16 +99,36 @@ async function getIceServers(): Promise<RTCIceServer[]> {
   return result.data.iceServers
 }
 
+/** One short two-tone "brring" pulse, synthesized (no audio asset needed). */
+function playRingtoneTick(ctx: AudioContext) {
+  const now = ctx.currentTime
+  ;[0, 0.16].forEach((offset) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = "sine"
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0, now + offset)
+    gain.gain.linearRampToValueAtTime(0.2, now + offset + 0.02)
+    gain.gain.linearRampToValueAtTime(0, now + offset + 0.14)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(now + offset)
+    osc.stop(now + offset + 0.15)
+  })
+}
+
 function VideoTile({
   stream,
   label,
   muted,
   showVideo,
+  size = "sm",
 }: {
   stream: MediaStream | null
   label: string
   muted: boolean
   showVideo: boolean
+  size?: "sm" | "lg"
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -116,11 +137,16 @@ function VideoTile({
   }, [stream])
 
   return (
-    <div className="relative flex aspect-video w-40 items-center justify-center overflow-hidden rounded-md bg-neutral-900">
+    <div
+      className={cn(
+        "relative flex aspect-video items-center justify-center overflow-hidden rounded-md bg-neutral-900",
+        size === "sm" ? "w-40" : "w-full max-w-md"
+      )}
+    >
       {showVideo && stream ? (
         <video ref={videoRef} autoPlay playsInline muted={muted} className="h-full w-full object-cover" />
       ) : (
-        <Avatar className="size-10">
+        <Avatar className={size === "sm" ? "size-10" : "size-16"}>
           <AvatarFallback className="bg-neutral-700 text-neutral-200">{initials(label)}</AvatarFallback>
         </Avatar>
       )}
@@ -147,6 +173,29 @@ export function CallProvider({
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map())
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map())
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  // Rings while an invite is waiting on this end. Synthesized via Web Audio
+  // instead of an audio asset — autoplay-blocked until the page has had
+  // some user interaction this session, same as any other audio, so it may
+  // stay silent on the very first page load before any click has happened.
+  useEffect(() => {
+    if (state.status !== "incoming") return
+    let ctx: AudioContext | null = null
+    try {
+      ctx = new AudioContext()
+      playRingtoneTick(ctx)
+    } catch (error) {
+      console.warn("[call] couldn't start ringtone:", error)
+    }
+    const interval = setInterval(() => {
+      if (ctx) playRingtoneTick(ctx)
+    }, 1500)
+    return () => {
+      clearInterval(interval)
+      ctx?.close()
+    }
+  }, [state.status])
 
   function sendSignal(conversationId: string, signal: CallSignal) {
     apiFetch(`/api/messages/conversations/${conversationId}/call-signal`, { method: "POST", body: signal }).catch(() => {
@@ -163,6 +212,7 @@ export function CallProvider({
     setLocalStream(null)
     setRemoteStreams(new Map())
     setState(IDLE_STATE)
+    setIsExpanded(false)
   }, [])
 
   const createPeerConnection = useCallback(
@@ -298,88 +348,102 @@ export function CallProvider({
     async (fromUserId: string, signal: CallSignal, conversationId: string) => {
       const current = stateRef.current
 
-      if (signal.kind === "invite") {
-        if (current.status !== "idle") {
-          sendSignal(conversationId, { kind: "decline", callId: signal.callId })
+      try {
+        if (signal.kind === "invite") {
+          if (current.status !== "idle") {
+            sendSignal(conversationId, { kind: "decline", callId: signal.callId })
+            return
+          }
+          setState((prev) => ({
+            ...prev,
+            status: "incoming",
+            incoming: { callId: signal.callId, conversationId, fromUserId, withVideo: signal.withVideo },
+          }))
           return
         }
-        setState((prev) => ({
-          ...prev,
-          status: "incoming",
-          incoming: { callId: signal.callId, conversationId, fromUserId, withVideo: signal.withVideo },
-        }))
-        return
-      }
 
-      if (signal.callId !== current.callId) return // stale/unrelated call
+        if (signal.callId !== current.callId) return // stale/unrelated call
 
-      if (signal.kind === "decline") {
-        toast.info("Call declined")
-        if (current.connectedUserIds.length <= 1) resetCall()
-        return
-      }
-
-      if (signal.kind === "end") {
-        peersRef.current.get(fromUserId)?.close()
-        peersRef.current.delete(fromUserId)
-        setRemoteStreams((prev) => {
-          const next = new Map(prev)
-          next.delete(fromUserId)
-          return next
-        })
-        setState((prev) => ({ ...prev, connectedUserIds: prev.connectedUserIds.filter((id) => id !== fromUserId) }))
-        // 1:1 call: the other side leaving ends it for us too.
-        if (current.participants.size <= 1) resetCall()
-        return
-      }
-
-      if (signal.kind === "accept") {
-        const iceServers = await getIceServers()
-        const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
-        setState((prev) => ({ ...prev, status: "in-call", connectedUserIds: [...prev.connectedUserIds, fromUserId] }))
-        const offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-        sendSignal(conversationId, { kind: "offer", callId: current.callId!, toUserId: fromUserId, sdp: offer })
-        return
-      }
-
-      if (signal.kind === "offer") {
-        const iceServers = await getIceServers()
-        const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
-        for (const c of pendingCandidatesRef.current.get(fromUserId) ?? []) {
-          await pc.addIceCandidate(new RTCIceCandidate(c))
+        if (signal.kind === "decline") {
+          toast.info("Call declined")
+          if (current.connectedUserIds.length <= 1) resetCall()
+          return
         }
-        pendingCandidatesRef.current.delete(fromUserId)
-        const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-        setState((prev) => ({
-          ...prev,
-          status: "in-call",
-          connectedUserIds: prev.connectedUserIds.includes(fromUserId)
-            ? prev.connectedUserIds
-            : [...prev.connectedUserIds, fromUserId],
-        }))
-        sendSignal(conversationId, { kind: "answer", callId: current.callId!, toUserId: fromUserId, sdp: answer })
-        return
-      }
 
-      if (signal.kind === "answer") {
-        const pc = peersRef.current.get(fromUserId)
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
-        return
-      }
-
-      if (signal.kind === "ice-candidate") {
-        const pc = peersRef.current.get(fromUserId)
-        const candidate = signal.candidate as RTCIceCandidateInit
-        if (pc?.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate))
-        } else {
-          const list = pendingCandidatesRef.current.get(fromUserId) ?? []
-          list.push(candidate)
-          pendingCandidatesRef.current.set(fromUserId, list)
+        if (signal.kind === "end") {
+          peersRef.current.get(fromUserId)?.close()
+          peersRef.current.delete(fromUserId)
+          setRemoteStreams((prev) => {
+            const next = new Map(prev)
+            next.delete(fromUserId)
+            return next
+          })
+          setState((prev) => ({ ...prev, connectedUserIds: prev.connectedUserIds.filter((id) => id !== fromUserId) }))
+          // 1:1 call: the other side leaving ends it for us too.
+          if (current.participants.size <= 1) resetCall()
+          return
         }
+
+        if (signal.kind === "accept") {
+          console.log(`[call] ${fromUserId} accepted — creating offer`)
+          const iceServers = await getIceServers()
+          const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
+          setState((prev) => ({ ...prev, status: "in-call", connectedUserIds: [...prev.connectedUserIds, fromUserId] }))
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          sendSignal(conversationId, { kind: "offer", callId: current.callId!, toUserId: fromUserId, sdp: offer })
+          return
+        }
+
+        if (signal.kind === "offer") {
+          console.log(`[call] received offer from ${fromUserId} — answering`)
+          const iceServers = await getIceServers()
+          const pc = createPeerConnection(fromUserId, conversationId, current.callId!, iceServers)
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
+          for (const c of pendingCandidatesRef.current.get(fromUserId) ?? []) {
+            await pc.addIceCandidate(new RTCIceCandidate(c))
+          }
+          pendingCandidatesRef.current.delete(fromUserId)
+          const answer = await pc.createAnswer()
+          await pc.setLocalDescription(answer)
+          setState((prev) => ({
+            ...prev,
+            status: "in-call",
+            connectedUserIds: prev.connectedUserIds.includes(fromUserId)
+              ? prev.connectedUserIds
+              : [...prev.connectedUserIds, fromUserId],
+          }))
+          sendSignal(conversationId, { kind: "answer", callId: current.callId!, toUserId: fromUserId, sdp: answer })
+          return
+        }
+
+        if (signal.kind === "answer") {
+          console.log(`[call] received answer from ${fromUserId}`)
+          const pc = peersRef.current.get(fromUserId)
+          if (pc) await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp as RTCSessionDescriptionInit))
+          return
+        }
+
+        if (signal.kind === "ice-candidate") {
+          const pc = peersRef.current.get(fromUserId)
+          const candidate = signal.candidate as RTCIceCandidateInit
+          if (pc?.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate))
+          } else {
+            const list = pendingCandidatesRef.current.get(fromUserId) ?? []
+            list.push(candidate)
+            pendingCandidatesRef.current.set(fromUserId, list)
+          }
+        }
+      } catch (error) {
+        // Every step above (fetching ICE servers, createOffer/
+        // createAnswer, setRemoteDescription...) used to let a thrown/
+        // rejected promise die silently — the UI just stayed stuck on
+        // "Calling…" forever with no visible cause. Surface it instead.
+        console.error(`[call] failed handling "${signal.kind}" signal from ${fromUserId}:`, error)
+        toast.error(
+          `Call connection failed (${signal.kind}): ${error instanceof Error ? error.message : String(error)}`
+        )
       }
     },
     [createPeerConnection, resetCall]
@@ -425,12 +489,33 @@ export function CallProvider({
       )}
 
       {(state.status === "outgoing" || state.status === "in-call") && (
-        <div className="fixed right-4 bottom-4 z-50 flex flex-col gap-2 rounded-lg border bg-card p-3 shadow-lg">
-          <p className="text-xs text-muted-foreground">
-            {state.status === "outgoing" ? "Calling…" : `On call · ${remoteParticipants.length + 1} people`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <VideoTile stream={localStream} label={`${currentUserName} (you)`} muted showVideo={state.withVideo && state.cameraOn} />
+        <div
+          className={cn(
+            "fixed z-50 flex flex-col gap-2 rounded-lg border bg-card p-3 shadow-lg",
+            isExpanded ? "inset-4 items-center justify-center md:inset-16" : "right-4 bottom-4"
+          )}
+        >
+          <div className="flex w-full items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {state.status === "outgoing" ? "Calling…" : `On call · ${remoteParticipants.length + 1} people`}
+            </p>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={() => setIsExpanded((v) => !v)}
+              title={isExpanded ? "Minimize" : "Expand"}
+            >
+              {isExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </Button>
+          </div>
+          <div className={cn("flex flex-wrap justify-center gap-2", isExpanded && "flex-1 items-center")}>
+            <VideoTile
+              stream={localStream}
+              label={`${currentUserName} (you)`}
+              muted
+              showVideo={state.withVideo && state.cameraOn}
+              size={isExpanded ? "lg" : "sm"}
+            />
             {remoteParticipants.map((p) => (
               <VideoTile
                 key={p.id}
@@ -438,6 +523,7 @@ export function CallProvider({
                 label={p.name}
                 muted={false}
                 showVideo={state.withVideo}
+                size={isExpanded ? "lg" : "sm"}
               />
             ))}
           </div>
