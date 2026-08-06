@@ -32,6 +32,13 @@ const envSchema = z.object({
   // Shared secret the biometric-device bridge script authenticates with
   // (machine-to-machine — no user session available on an unattended PC).
   BIOMETRIC_SYNC_API_KEY: z.string().min(16).optional(),
+
+  // TURN server (coturn) for WebRTC calling — TURN_SECRET must match
+  // coturn's static-auth-secret exactly; TURN_HOST is the public
+  // hostname/IP it's reachable at. Both optional: calling is disabled
+  // (no ICE servers returned) if unset.
+  TURN_SECRET: z.string().min(16).optional(),
+  TURN_HOST: z.string().optional(),
 })
 
 type Env = z.infer<typeof envSchema>

@@ -6,7 +6,7 @@ import { saveUploadedFile, assertAllowedFile, ALLOWED_DOCUMENT_MIME_TYPES, ALLOW
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { isConversationParticipant } from "@/features/messaging/authorization"
 import { publishToUser } from "@/features/messaging/lib/realtime"
-import type { SendMessageInput } from "@/features/messaging/schemas"
+import type { SendMessageInput, CallSignalInput } from "@/features/messaging/schemas"
 
 const ALLOWED_ATTACHMENT_MIME_TYPES = [...new Set([...ALLOWED_DOCUMENT_MIME_TYPES, ...ALLOWED_PHOTO_MIME_TYPES])]
 
@@ -125,6 +125,31 @@ export async function sendMessage(
   }
 
   return message
+}
+
+const POINT_TO_POINT_KINDS = ["offer", "answer", "ice-candidate"] as const
+
+export async function relayCallSignal(conversationId: string, signal: CallSignalInput, viewer: AccessTokenPayload) {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { participants: { select: { userId: true } } },
+  })
+  if (!conversation) throw new NotFoundError("Conversation not found")
+  if (!isConversationParticipant(viewer.sub, conversation)) throw new ForbiddenError()
+
+  const otherParticipantIds = conversation.participants.map((p) => p.userId).filter((id) => id !== viewer.sub)
+
+  const isPointToPoint = (POINT_TO_POINT_KINDS as readonly string[]).includes(signal.kind)
+  if (isPointToPoint) {
+    const toUserId = (signal as { toUserId: string }).toUserId
+    if (!otherParticipantIds.includes(toUserId)) throw new ForbiddenError()
+    publishToUser(toUserId, { type: "call-signal", conversationId, fromUserId: viewer.sub, signal })
+    return
+  }
+
+  for (const targetId of otherParticipantIds) {
+    publishToUser(targetId, { type: "call-signal", conversationId, fromUserId: viewer.sub, signal })
+  }
 }
 
 export async function markConversationRead(conversationId: string, viewer: AccessTokenPayload) {

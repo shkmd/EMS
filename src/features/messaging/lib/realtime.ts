@@ -18,6 +18,28 @@ export type RealtimeMessageEvent = {
   }
 }
 
+// Call signaling relayed over the same per-user channel as messages. Only
+// offer/answer/ice-candidate are point-to-point (toUserId); invite/accept/
+// decline/end are broadcast to every other participant so everyone's call
+// UI stays in sync (who's ringing, who joined, who left).
+export type CallSignal =
+  | { kind: "invite"; callId: string; withVideo: boolean }
+  | { kind: "accept"; callId: string }
+  | { kind: "decline"; callId: string }
+  | { kind: "end"; callId: string }
+  | { kind: "offer"; callId: string; toUserId: string; sdp: unknown }
+  | { kind: "answer"; callId: string; toUserId: string; sdp: unknown }
+  | { kind: "ice-candidate"; callId: string; toUserId: string; candidate: unknown }
+
+export type RealtimeCallEvent = {
+  type: "call-signal"
+  conversationId: string
+  fromUserId: string
+  signal: CallSignal
+}
+
+export type RealtimeEvent = RealtimeMessageEvent | RealtimeCallEvent
+
 // This app runs as a single Node process (one Docker container replica), so
 // an in-memory EventEmitter is enough for pub/sub between the mutation that
 // creates a message and any open SSE connections for its recipient. A
@@ -37,11 +59,11 @@ const emitter = globalForRealtime.messagingEmitter ?? new EventEmitter()
 emitter.setMaxListeners(0)
 globalForRealtime.messagingEmitter = emitter
 
-export function publishToUser(userId: string, event: RealtimeMessageEvent) {
+export function publishToUser(userId: string, event: RealtimeEvent) {
   emitter.emit(`user:${userId}`, event)
 }
 
-export function subscribeToUser(userId: string, listener: (event: RealtimeMessageEvent) => void) {
+export function subscribeToUser(userId: string, listener: (event: RealtimeEvent) => void) {
   emitter.on(`user:${userId}`, listener)
   return () => emitter.off(`user:${userId}`, listener)
 }
