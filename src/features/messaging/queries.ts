@@ -1,5 +1,7 @@
 import "server-only"
 
+import { Prisma } from "@prisma/client"
+
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import { isConversationParticipant } from "@/features/messaging/authorization"
@@ -29,32 +31,44 @@ function toParticipantRef(user: ParticipantRow): ParticipantRef {
 
 export async function listConversations(viewerUserId: string) {
   const conversations = await prisma.conversation.findMany({
-    where: { OR: [{ participantAId: viewerUserId }, { participantBId: viewerUserId }] },
+    where: { participants: { some: { userId: viewerUserId } } },
     include: {
-      participantA: { select: participantSelect },
-      participantB: { select: participantSelect },
+      participants: { include: { user: { select: participantSelect } } },
       messages: { take: 1, orderBy: { createdAt: "desc" } },
     },
     orderBy: { updatedAt: "desc" },
   })
 
   const conversationIds = conversations.map((c) => c.id)
-  const unreadGroups =
+
+  // Unread count per conversation: messages not sent by the viewer, created
+  // after the viewer's own lastReadAt for that conversation (each
+  // conversation can have a different cutoff for the same viewer, which
+  // rules out a plain groupBy — needs a join against the per-row cutoff).
+  const unreadRows =
     conversationIds.length > 0
-      ? await prisma.message.groupBy({
-          by: ["conversationId"],
-          where: { conversationId: { in: conversationIds }, senderId: { not: viewerUserId }, readAt: null },
-          _count: { _all: true },
-        })
+      ? await prisma.$queryRaw<{ conversationId: string; count: bigint }[]>(
+          Prisma.sql`
+            SELECT m.conversationId as conversationId, COUNT(*) as count
+            FROM messages m
+            JOIN conversation_participants cp ON cp.conversationId = m.conversationId AND cp.userId = ${viewerUserId}
+            WHERE m.conversationId IN (${Prisma.join(conversationIds)})
+              AND m.senderId != ${viewerUserId}
+              AND (cp.lastReadAt IS NULL OR m.createdAt > cp.lastReadAt)
+            GROUP BY m.conversationId
+          `
+        )
       : []
-  const unreadByConversation = new Map(unreadGroups.map((g) => [g.conversationId, g._count._all]))
+  const unreadByConversation = new Map(unreadRows.map((r) => [r.conversationId, Number(r.count)]))
 
   return conversations.map((c) => {
-    const other = c.participantAId === viewerUserId ? c.participantB : c.participantA
+    const participants = c.participants.filter((p) => p.userId !== viewerUserId).map((p) => toParticipantRef(p.user))
     const lastMessage = c.messages[0] ?? null
     return {
       id: c.id,
-      other: toParticipantRef(other),
+      isGroup: c.isGroup,
+      name: c.name,
+      participants,
       lastMessage: lastMessage
         ? {
             body: lastMessage.body,
@@ -72,20 +86,20 @@ export async function listConversations(viewerUserId: string) {
 export async function getConversationForViewer(conversationId: string, viewerUserId: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    include: {
-      participantA: { select: participantSelect },
-      participantB: { select: participantSelect },
-    },
+    include: { participants: { include: { user: { select: participantSelect } } } },
   })
   if (!conversation) throw new NotFoundError("Conversation not found")
   if (!isConversationParticipant(viewerUserId, conversation)) throw new ForbiddenError()
 
-  const other = conversation.participantAId === viewerUserId ? conversation.participantB : conversation.participantA
-  return { id: conversation.id, other: toParticipantRef(other) }
+  const participants = conversation.participants.filter((p) => p.userId !== viewerUserId).map((p) => toParticipantRef(p.user))
+  return { id: conversation.id, isGroup: conversation.isGroup, name: conversation.name, participants }
 }
 
 export async function listMessages(conversationId: string, viewerUserId: string, query: MessagesListQuery) {
-  const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { participants: { select: { userId: true } } },
+  })
   if (!conversation) throw new NotFoundError("Conversation not found")
   if (!isConversationParticipant(viewerUserId, conversation)) throw new ForbiddenError()
 
@@ -115,11 +129,14 @@ export async function listMessageableUsers(viewerUserId: string) {
 }
 
 export async function getTotalUnreadCount(viewerUserId: string) {
-  return prisma.message.count({
-    where: {
-      readAt: null,
-      senderId: { not: viewerUserId },
-      conversation: { OR: [{ participantAId: viewerUserId }, { participantBId: viewerUserId }] },
-    },
-  })
+  const result = await prisma.$queryRaw<{ count: bigint }[]>(
+    Prisma.sql`
+      SELECT COUNT(*) as count
+      FROM messages m
+      JOIN conversation_participants cp ON cp.conversationId = m.conversationId AND cp.userId = ${viewerUserId}
+      WHERE m.senderId != ${viewerUserId}
+        AND (cp.lastReadAt IS NULL OR m.createdAt > cp.lastReadAt)
+    `
+  )
+  return Number(result[0]?.count ?? 0)
 }

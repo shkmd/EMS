@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ mes
 
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-      include: { conversation: true },
+      include: { conversation: { include: { participants: { select: { userId: true } } } } },
     })
     if (!message) throw new NotFoundError("Message not found")
     if (!isConversationParticipant(session.sub, message.conversation)) throw new ForbiddenError()

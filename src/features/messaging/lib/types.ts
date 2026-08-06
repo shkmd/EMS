@@ -7,10 +7,21 @@ export type ParticipantRef = {
 
 export type ConversationSummary = {
   id: string
-  other: ParticipantRef
+  isGroup: boolean
+  name: string | null
+  // Everyone in the conversation except the viewer — a single entry for a
+  // 1:1 conversation, two or more for a group.
+  participants: ParticipantRef[]
   lastMessage: { body: string | null; attachmentName: string | null; senderId: string; createdAt: string } | null
   unreadCount: number
   updatedAt: string
+}
+
+export type ConversationDetail = {
+  id: string
+  isGroup: boolean
+  name: string | null
+  participants: ParticipantRef[]
 }
 
 export type MessageItem = {
@@ -22,6 +33,5 @@ export type MessageItem = {
   attachmentName: string | null
   attachmentType: string | null
   attachmentSize: number | null
-  readAt: string | null
   createdAt: string
 }

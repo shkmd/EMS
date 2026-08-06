@@ -5,6 +5,12 @@ export const startConversationSchema = z.object({
 })
 export type StartConversationInput = z.infer<typeof startConversationSchema>
 
+export const createGroupConversationSchema = z.object({
+  name: z.string().min(1, "Group name is required").max(100),
+  userIds: z.array(z.string()).min(2, "Pick at least 2 other people"),
+})
+export type CreateGroupConversationInput = z.infer<typeof createGroupConversationSchema>
+
 export const sendMessageSchema = z.object({
   body: z.string().max(4000).optional(),
 })

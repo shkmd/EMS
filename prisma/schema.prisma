@@ -217,21 +217,21 @@ model User {
 
   employee Employee? @relation("UserEmployee")
 
-  passwordResetTokens PasswordResetToken[]
-  refreshTokens       RefreshToken[]
-  auditLogs           AuditLog[]
-  notifications       Notification[]
-  employeeNotes       EmployeeNote[]
-  announcements       Announcement[]
-  reviewsGiven        PerformanceReview[]  @relation("ReviewerUser")
-  conversationsAsA    Conversation[]        @relation("ConversationParticipantA")
-  conversationsAsB    Conversation[]        @relation("ConversationParticipantB")
-  messagesSent        Message[]
-  projectsCreated     Project[]             @relation("ProjectCreatedBy")
-  tasksCreated        Task[]                @relation("TaskCreatedBy")
-  taskComments        TaskComment[]
-  taskActivities      TaskActivity[]
-  taskAttachments     TaskAttachment[]
+  passwordResetTokens        PasswordResetToken[]
+  refreshTokens              RefreshToken[]
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  employeeNotes              EmployeeNote[]
+  announcements              Announcement[]
+  reviewsGiven               PerformanceReview[]       @relation("ReviewerUser")
+  conversationsCreated       Conversation[]            @relation("ConversationCreatedBy")
+  conversationParticipations ConversationParticipant[]
+  messagesSent               Message[]
+  projectsCreated            Project[]                 @relation("ProjectCreatedBy")
+  tasksCreated               Task[]                    @relation("TaskCreatedBy")
+  taskComments               TaskComment[]
+  taskActivities             TaskActivity[]
+  taskAttachments            TaskAttachment[]
 
   @@index([role])
   @@map("users")
@@ -579,16 +579,16 @@ model LeaveRequest {
 }
 
 model ExpenseClaim {
-  id          String              @id @default(cuid())
+  id          String             @id @default(cuid())
   employeeId  String
   category    ExpenseCategory
   title       String
-  description String?             @db.Text
-  amount      Decimal             @db.Decimal(12, 2)
-  expenseDate DateTime            @db.Date
+  description String?            @db.Text
+  amount      Decimal            @db.Decimal(12, 2)
+  expenseDate DateTime           @db.Date
   receiptUrl  String?
   receiptName String?
-  status      ExpenseClaimStatus  @default(PENDING)
+  status      ExpenseClaimStatus @default(PENDING)
 
   managerId       String?
   managerActionAt DateTime?
@@ -836,37 +836,56 @@ model Notification {
 // ============================================================================
 
 model Conversation {
-  id             String   @id @default(cuid())
-  // Always stored with participantAId < participantBId (lexicographically)
-  // so a pair of users maps to exactly one conversation regardless of who
-  // started it — enforced in the mutation, not the DB. Keyed by User.id
-  // (not Employee.id) so accounts with no linked Employee profile — e.g.
-  // pure admin logins — can still participate.
-  participantAId String
-  participantBId String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(cuid())
+  // Group conversations have a user-set name and can have any number of
+  // participants; 1:1 conversations are unnamed (the UI derives a display
+  // name from the other participant) and always have exactly 2. Keyed by
+  // User.id (not Employee.id) so accounts with no linked Employee profile —
+  // e.g. pure admin logins — can still participate.
+  isGroup     Boolean  @default(false)
+  name        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  participantA User      @relation("ConversationParticipantA", fields: [participantAId], references: [id], onDelete: Cascade)
-  participantB User      @relation("ConversationParticipantB", fields: [participantBId], references: [id], onDelete: Cascade)
+  createdBy    User?                     @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
   messages     Message[]
 
-  @@unique([participantAId, participantBId])
-  @@index([participantBId])
   @@map("conversations")
 }
 
-model Message {
+// One row per (conversation, user) pair. A 1:1 conversation is just a group
+// of exactly 2 with isGroup=false — modeling both shapes the same way here
+// is what lets group chat reuse the same queries/mutations as direct
+// messages instead of forking the whole feature.
+model ConversationParticipant {
   id             String    @id @default(cuid())
   conversationId String
+  userId         String
+  // Unread count = messages in this conversation, not sent by this user,
+  // created after lastReadAt (or all of them, if never read).
+  lastReadAt     DateTime?
+  joinedAt       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
   senderId       String
-  body           String?   @db.Text
+  body           String?  @db.Text
   attachmentUrl  String?
   attachmentName String?
   attachmentType String?
   attachmentSize Int?
-  readAt         DateTime?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
@@ -897,23 +916,23 @@ model Project {
 }
 
 model Task {
-  id          String       @id @default(cuid())
-  projectId   String
-  title       String
-  description String?      @db.Text
-  status      TaskStatus   @default(TODO)
-  priority    TaskPriority @default(MEDIUM)
-  startDate   DateTime?
-  dueDate     DateTime?
+  id           String       @id @default(cuid())
+  projectId    String
+  title        String
+  description  String?      @db.Text
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  startDate    DateTime?
+  dueDate      DateTime?
   // Manual ordering within a project/status column, used by the Board
   // (drag-and-drop) view — assigned at creation, reassigned on reorder.
-  position    Int          @default(0)
-  createdById String
+  position     Int          @default(0)
+  createdById  String
   // Single-level subtasks only: a subtask (non-null parentTaskId) cannot
   // itself have subtasks — enforced in the mutation, not the DB.
   parentTaskId String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy      User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
@@ -945,14 +964,14 @@ model TaskChecklistItem {
 }
 
 model TaskAttachment {
-  id             String   @id @default(cuid())
-  taskId         String
-  uploadedById   String
-  fileUrl        String
-  fileName       String
-  fileType       String
-  fileSize       Int
-  createdAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  taskId       String
+  uploadedById String
+  fileUrl      String
+  fileName     String
+  fileType     String
+  fileSize     Int
+  createdAt    DateTime @default(now())
 
   task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)

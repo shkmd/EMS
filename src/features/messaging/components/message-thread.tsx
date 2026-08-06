@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
-import { ArrowLeft, Download, Loader2, Paperclip, Send, X } from "lucide-react"
+import { ArrowLeft, Download, Loader2, Paperclip, Send, Users, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { initials } from "@/features/messaging/lib/initials"
-import type { ParticipantRef, MessageItem } from "@/features/messaging/lib/types"
+import type { ConversationDetail, MessageItem } from "@/features/messaging/lib/types"
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
@@ -41,14 +41,14 @@ function AttachmentPreview({ message }: { message: MessageItem }) {
 }
 
 export function MessageThread({
-  other,
+  conversation,
   messages,
   currentUserId,
   isLoading,
   onSend,
   onBack,
 }: {
-  other: ParticipantRef | null
+  conversation: ConversationDetail | null
   messages: MessageItem[]
   currentUserId: string
   isLoading: boolean
@@ -87,13 +87,20 @@ export function MessageThread({
     }
   }
 
-  if (!other) {
+  if (!conversation) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Select a conversation, or start a new one.
       </div>
     )
   }
+
+  const isGroup = conversation.isGroup
+  const title = isGroup
+    ? conversation.name || conversation.participants.map((p) => p.name).join(", ") || "Group"
+    : (conversation.participants[0]?.name ?? "Unknown")
+  const subtitle = isGroup ? conversation.participants.map((p) => p.name).join(", ") : null
+  const senderById = new Map(conversation.participants.map((p) => [p.id, p]))
 
   return (
     <div className="flex h-full flex-col">
@@ -102,10 +109,23 @@ export function MessageThread({
           <ArrowLeft />
         </Button>
         <Avatar className="size-8">
-          {other.employeeId && <AvatarImage src={`/api/employees/${other.employeeId}/photo`} />}
-          <AvatarFallback className="text-xs">{initials(other.name)}</AvatarFallback>
+          {isGroup ? (
+            <AvatarFallback>
+              <Users className="size-4" />
+            </AvatarFallback>
+          ) : (
+            <>
+              {conversation.participants[0]?.employeeId && (
+                <AvatarImage src={`/api/employees/${conversation.participants[0].employeeId}/photo`} />
+              )}
+              <AvatarFallback className="text-xs">{initials(title)}</AvatarFallback>
+            </>
+          )}
         </Avatar>
-        <span className="text-sm font-medium">{other.name}</span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">{title}</div>
+          {subtitle && <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -117,9 +137,11 @@ export function MessageThread({
           <div className="flex flex-col gap-3">
             {messages.map((m) => {
               const isOwn = m.senderId === currentUserId
+              const senderName = isGroup && !isOwn ? senderById.get(m.senderId)?.name : null
               return (
                 <div key={m.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
                   <div className={cn("flex max-w-[75%] flex-col gap-1", isOwn && "items-end")}>
+                    {senderName && <span className="px-1 text-[11px] font-medium text-muted-foreground">{senderName}</span>}
                     {m.body && (
                       <div
                         className={cn(

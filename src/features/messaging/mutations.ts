@@ -19,15 +19,44 @@ export async function startConversation(targetUserId: string, viewer: AccessToke
   })
   if (!target) throw new NotFoundError("User not found")
 
-  const [participantAId, participantBId] = [viewer.sub, targetUserId].sort()
-
-  const conversation = await prisma.conversation.upsert({
-    where: { participantAId_participantBId: { participantAId, participantBId } },
-    update: {},
-    create: { participantAId, participantBId },
+  // A 1:1 conversation between this pair, if one already exists — checked
+  // via the participant join table rather than a unique-columns constraint,
+  // since group conversations share the same table.
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      isGroup: false,
+      AND: [{ participants: { some: { userId: viewer.sub } } }, { participants: { some: { userId: targetUserId } } }],
+    },
   })
+  if (existing) return existing
 
-  return conversation
+  return prisma.conversation.create({
+    data: {
+      isGroup: false,
+      createdById: viewer.sub,
+      participants: { create: [{ userId: viewer.sub }, { userId: targetUserId }] },
+    },
+  })
+}
+
+export async function createGroupConversation(name: string, participantUserIds: string[], viewer: AccessTokenPayload) {
+  const uniqueIds = [...new Set(participantUserIds.filter((id) => id !== viewer.sub))]
+  if (uniqueIds.length < 2) throw new ValidationError("Pick at least 2 other people for a group")
+
+  const validUsers = await prisma.user.findMany({
+    where: { id: { in: uniqueIds }, isActive: true },
+    select: { id: true },
+  })
+  if (validUsers.length !== uniqueIds.length) throw new ValidationError("One or more selected users are unavailable")
+
+  return prisma.conversation.create({
+    data: {
+      isGroup: true,
+      name,
+      createdById: viewer.sub,
+      participants: { create: [{ userId: viewer.sub }, ...uniqueIds.map((userId) => ({ userId }))] },
+    },
+  })
 }
 
 export async function sendMessage(
@@ -36,7 +65,10 @@ export async function sendMessage(
   attachmentFile: File | null,
   viewer: AccessTokenPayload
 ) {
-  const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { participants: { select: { userId: true } } },
+  })
   if (!conversation) throw new NotFoundError("Conversation not found")
   if (!isConversationParticipant(viewer.sub, conversation)) throw new ForbiddenError()
 
@@ -73,34 +105,38 @@ export async function sendMessage(
     prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }),
   ])
 
-  const recipientId = conversation.participantAId === viewer.sub ? conversation.participantBId : conversation.participantAId
-
-  publishToUser(recipientId, {
-    type: "message",
-    conversationId,
-    message: {
-      id: message.id,
-      conversationId: message.conversationId,
-      senderId: message.senderId,
-      body: message.body,
-      attachmentUrl: message.attachmentUrl,
-      attachmentName: message.attachmentName,
-      attachmentType: message.attachmentType,
-      attachmentSize: message.attachmentSize,
-      createdAt: message.createdAt.toISOString(),
-    },
-  })
+  const recipientIds = conversation.participants.map((p) => p.userId).filter((id) => id !== viewer.sub)
+  for (const recipientId of recipientIds) {
+    publishToUser(recipientId, {
+      type: "message",
+      conversationId,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        body: message.body,
+        attachmentUrl: message.attachmentUrl,
+        attachmentName: message.attachmentName,
+        attachmentType: message.attachmentType,
+        attachmentSize: message.attachmentSize,
+        createdAt: message.createdAt.toISOString(),
+      },
+    })
+  }
 
   return message
 }
 
 export async function markConversationRead(conversationId: string, viewer: AccessTokenPayload) {
-  const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } })
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { participants: { select: { userId: true } } },
+  })
   if (!conversation) throw new NotFoundError("Conversation not found")
   if (!isConversationParticipant(viewer.sub, conversation)) throw new ForbiddenError()
 
-  await prisma.message.updateMany({
-    where: { conversationId, senderId: { not: viewer.sub }, readAt: null },
-    data: { readAt: new Date() },
+  await prisma.conversationParticipant.updateMany({
+    where: { conversationId, userId: viewer.sub },
+    data: { lastReadAt: new Date() },
   })
 }

@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api-client"
 import { ConversationList } from "@/features/messaging/components/conversation-list"
 import { MessageThread } from "@/features/messaging/components/message-thread"
 import { NewConversationDialog } from "@/features/messaging/components/new-conversation-dialog"
-import type { ConversationSummary, ParticipantRef, MessageItem } from "@/features/messaging/lib/types"
+import type { ConversationSummary, ConversationDetail, MessageItem } from "@/features/messaging/lib/types"
 
 export function MessagesApp({
   initialConversations,
@@ -18,7 +18,7 @@ export function MessagesApp({
 }) {
   const [conversations, setConversations] = useState(initialConversations)
   const [activeId, setActiveId] = useState<string | null>(initialConversations[0]?.id ?? null)
-  const [activeOther, setActiveOther] = useState<ParticipantRef | null>(null)
+  const [activeConversation, setActiveConversation] = useState<ConversationDetail | null>(null)
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -35,11 +35,11 @@ export function MessagesApp({
     setActiveId(id)
     setMobileView("thread")
     setIsLoadingMessages(true)
-    const result = await apiFetch<{ conversation: { id: string; other: ParticipantRef }; messages: MessageItem[] }>(
+    const result = await apiFetch<{ conversation: ConversationDetail; messages: MessageItem[] }>(
       `/api/messages/conversations/${id}`
     )
     if (result.success) {
-      setActiveOther(result.data.conversation.other)
+      setActiveConversation(result.data.conversation)
       setMessages(result.data.messages)
       await apiFetch(`/api/messages/conversations/${id}/read`, { method: "POST" })
       setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)))
@@ -134,6 +134,19 @@ export function MessagesApp({
     openConversation(result.data.conversation.id)
   }
 
+  async function handleCreateGroup(name: string, userIds: string[]) {
+    const result = await apiFetch<{ conversation: { id: string } }>("/api/messages/groups", {
+      method: "POST",
+      body: { name, userIds },
+    })
+    if (!result.success) {
+      toast.error(result.error.message)
+      return
+    }
+    await refreshConversations()
+    openConversation(result.data.conversation.id)
+  }
+
   return (
     <div className="grid h-[calc(100vh-160px)] grid-cols-1 overflow-hidden rounded-lg border md:grid-cols-[300px_1fr]">
       <div className={mobileView === "list" ? "block md:border-r" : "hidden md:block md:border-r"}>
@@ -146,7 +159,7 @@ export function MessagesApp({
       </div>
       <div className={mobileView === "thread" ? "block" : "hidden md:block"}>
         <MessageThread
-          other={activeOther}
+          conversation={activeConversation}
           messages={messages}
           currentUserId={currentUserId}
           isLoading={isLoadingMessages}
@@ -154,7 +167,12 @@ export function MessagesApp({
           onBack={() => setMobileView("list")}
         />
       </div>
-      <NewConversationDialog open={dialogOpen} onOpenChange={setDialogOpen} onSelect={handleStartConversation} />
+      <NewConversationDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onStartConversation={handleStartConversation}
+        onCreateGroup={handleCreateGroup}
+      />
     </div>
   )
 }

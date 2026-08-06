@@ -1,6 +1,6 @@
 export function isConversationParticipant(
   viewerUserId: string,
-  conversation: { participantAId: string; participantBId: string }
+  conversation: { participants: { userId: string }[] }
 ) {
-  return viewerUserId === conversation.participantAId || viewerUserId === conversation.participantBId
+  return conversation.participants.some((p) => p.userId === viewerUserId)
 }
