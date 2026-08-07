@@ -30,6 +30,7 @@ type TeamMember = {
     breaks: Break[]
   } | null
   screenActivity: { activeSeconds: number; idleSeconds: number; lastSeenAt: string | null } | null
+  dailyLog: { note: string; updatedAt: string } | null
 }
 
 const REFRESH_INTERVAL_MS = 30_000
@@ -117,13 +118,14 @@ export function TeamAttendanceTable({
                   <TableHead>Check Out</TableHead>
                   <TableHead>Break</TableHead>
                   <TableHead>Screen Time</TableHead>
+                  <TableHead>Today&apos;s Update</TableHead>
                   {canManage && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 8 : 7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={canManage ? 9 : 8} className="h-24 text-center text-muted-foreground">
                       No team members found.
                     </TableCell>
                   </TableRow>
@@ -189,6 +191,15 @@ export function TeamAttendanceTable({
                               <span className="text-muted-foreground"> · {formatDuration(member.screenActivity.idleSeconds)} idle</span>
                             </span>
                           </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-48">
+                        {member.dailyLog ? (
+                          <span className="line-clamp-2 text-xs" title={member.dailyLog.note}>
+                            {member.dailyLog.note}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}

@@ -406,6 +406,7 @@ model Employee {
   timelineEvents         EmployeeTimelineEvent[]
   attendances            Attendance[]
   screenActivities       ScreenActivity[]
+  dailyLogs              DailyLog[]
   leaveRequestsMade      LeaveRequest[]          @relation("LeaveApplicant")
   leaveRequestsManaged   LeaveRequest[]          @relation("LeaveManagerApprover")
   leaveRequestsHrManaged LeaveRequest[]          @relation("LeaveHrApprover")
@@ -532,6 +533,25 @@ model ScreenActivity {
   @@unique([employeeId, date])
   @@index([date])
   @@map("screen_activities")
+}
+
+// A free-text "what I worked on today" entry — one per employee per day,
+// separate from formal Project/Task records for anything that doesn't fit
+// a tracked task. Visible to the employee's manager/HR alongside
+// attendance and screen time.
+model DailyLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime @db.Date
+  note       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("daily_logs")
 }
 
 // ============================================================================

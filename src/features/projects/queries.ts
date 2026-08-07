@@ -197,6 +197,28 @@ export async function getTaskExtras(taskId: string): Promise<TaskExtras> {
   }
 }
 
+/** Not-done tasks assigned to this employee, across every project — for a
+ * dashboard "my tasks" widget, not the full per-project task list. */
+export async function listMyTasks(employeeId: string) {
+  const tasks = await prisma.task.findMany({
+    where: { assignees: { some: { employeeId } }, status: { not: "DONE" } },
+    include: { project: { select: { id: true, name: true, color: true } } },
+    orderBy: [{ dueDate: "asc" }, { priority: "desc" }, { createdAt: "asc" }],
+    take: 20,
+  })
+
+  return tasks.map((t) => ({
+    id: t.id,
+    projectId: t.projectId,
+    projectName: t.project.name,
+    projectColor: t.project.color,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    dueDate: t.dueDate,
+  }))
+}
+
 /** Active employees selectable as task assignees. */
 export async function listAssignableEmployees() {
   const employees = await prisma.employee.findMany({

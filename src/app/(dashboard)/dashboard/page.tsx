@@ -13,6 +13,8 @@ import { LeaveChart } from "@/features/dashboard/components/leave-chart";
 import { CelebrationsCard } from "@/features/dashboard/components/celebrations-card";
 import { TodayCard } from "@/features/attendance/components/today-card";
 import { getTodayAttendance } from "@/features/attendance/queries";
+import { MyTasksCard } from "@/features/projects/components/my-tasks-card";
+import { DailyLogCard } from "@/features/daily-log/components/daily-log-card";
 import {
   getEmployeeStats,
   getPendingLeaveRequestsCount,
@@ -104,6 +106,13 @@ export default async function DashboardPage({
               : null
           }
         />
+      )}
+
+      {session.employeeId && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <MyTasksCard />
+          <DailyLogCard />
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 xl:grid-cols-5">
