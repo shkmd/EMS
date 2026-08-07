@@ -8,6 +8,7 @@ import { TodayCard } from "@/features/attendance/components/today-card";
 import { AttendanceCalendar } from "@/features/attendance/components/attendance-calendar";
 import { TeamAttendanceTable } from "@/features/attendance/components/team-attendance-table";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
+import { DailyTaskReport } from "@/features/daily-log/components/daily-task-report";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Attendance | EMS" };
@@ -24,7 +25,7 @@ export default async function AttendancePage({
   const hasEmployeeProfile = !!session.employeeId;
   const visibleTabs = [
     ...(hasEmployeeProfile ? ["my"] : []),
-    ...(showTeamTab ? ["team", "reports"] : []),
+    ...(showTeamTab ? ["team", "daily-tasks", "reports"] : []),
   ];
   const defaultTab =
     tab && visibleTabs.includes(tab) ? tab : hasEmployeeProfile ? "my" : showTeamTab ? "team" : "reports";
@@ -54,6 +55,7 @@ export default async function AttendancePage({
         <TabsList>
           {hasEmployeeProfile && <TabsTrigger value="my">My Attendance</TabsTrigger>}
           {showTeamTab && <TabsTrigger value="team">Team</TabsTrigger>}
+          {showTeamTab && <TabsTrigger value="daily-tasks">Daily Tasks</TabsTrigger>}
           {showTeamTab && <TabsTrigger value="reports">Reports</TabsTrigger>}
         </TabsList>
 
@@ -85,6 +87,12 @@ export default async function AttendancePage({
         {showTeamTab && (
           <TabsContent value="team" className="mt-4">
             <TeamAttendanceTable canManage={canManage} employees={employeeOptions} />
+          </TabsContent>
+        )}
+
+        {showTeamTab && (
+          <TabsContent value="daily-tasks" className="mt-4">
+            <DailyTaskReport departments={departments} employees={employeeOptions} />
           </TabsContent>
         )}
 
