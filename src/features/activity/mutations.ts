@@ -1,5 +1,6 @@
 import "server-only"
 
+import { Prisma } from "@prisma/client"
 import { differenceInSeconds } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
@@ -22,14 +23,24 @@ export async function recordHeartbeat(viewer: AccessTokenPayload, input: Heartbe
   const date = toUtcDateOnly()
   const now = new Date()
 
-  const existing = await prisma.screenActivity.findUnique({
+  let existing = await prisma.screenActivity.findUnique({
     where: { employeeId_date: { employeeId, date } },
   })
 
   if (!existing) {
-    await prisma.screenActivity.create({ data: { employeeId, date, lastSeenAt: now } })
-    return
+    try {
+      await prisma.screenActivity.create({ data: { employeeId, date, lastSeenAt: now } })
+      return
+    } catch (error) {
+      // Lost a race with a concurrent heartbeat (e.g. multiple open tabs)
+      // that created today's row first between our findUnique and create —
+      // fall through and update that row instead of failing the request.
+      const lostCreateRace = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
+      if (!lostCreateRace) throw error
+      existing = await prisma.screenActivity.findUnique({ where: { employeeId_date: { employeeId, date } } })
+    }
   }
+  if (!existing) return
 
   const elapsedSeconds = existing.lastSeenAt ? Math.max(0, differenceInSeconds(now, existing.lastSeenAt)) : 0
   const cappedSeconds = Math.min(elapsedSeconds, HEARTBEAT_CAP_SECONDS)
