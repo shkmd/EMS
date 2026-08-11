@@ -36,6 +36,12 @@ export const metadata: Metadata = {
   description: "Modern HR management system — employees, attendance, leave, payroll and more.",
 };
 
+// The root layout now reads CompanySettings on every render so branding
+// changes apply without a redeploy. That DB call can't run during `next
+// build`'s static prerendering (DATABASE_URL isn't available in the build
+// stage), so the whole tree must be forced dynamic rather than prerendered.
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children,
 }: Readonly<{
