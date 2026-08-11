@@ -8,7 +8,7 @@ import { getEnv } from "@/config/env"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/leave/authorization"
 import { calculateLeaveDays } from "@/features/leave/lib/calculate-days"
-import type { ApplyLeaveInput, LeaveActionInput } from "@/features/leave/schemas"
+import type { ApplyLeaveInput, LeaveActionInput, LeaveRequestUpdateInput } from "@/features/leave/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
@@ -244,6 +244,77 @@ export async function hrAction(id: string, input: LeaveActionInput, viewer: Acce
     action: approving ? "LEAVE_HR_APPROVED" : "LEAVE_HR_REJECTED",
     entityType: "LeaveRequest",
     entityId: id,
+    ...meta,
+  })
+
+  return updated
+}
+
+/** HR-only direct correction of an existing request's dates/type/duration/
+ * reason/status — for fixing mistakes, not the normal apply→approve flow.
+ * Reverses whatever balance impact the OLD status/type/days had, then
+ * reapplies for the NEW ones, so any combination of changes (different
+ * days, different leave type, different status) nets out correctly. */
+export async function updateLeaveRequest(id: string, input: LeaveRequestUpdateInput, viewer: AccessTokenPayload, meta: Meta) {
+  if (!canActAsHr(viewer.role)) throw new ForbiddenError()
+
+  const existing = await prisma.leaveRequest.findUnique({ where: { id }, include: { leaveType: true } })
+  if (!existing) throw new NotFoundError("Leave request not found")
+
+  const newLeaveType = await prisma.leaveType.findUnique({ where: { id: input.leaveTypeId } })
+  if (!newLeaveType) throw new ValidationError("Invalid leave type")
+
+  const startDate = new Date(input.startDate)
+  const endDate = new Date(input.endDate)
+  const days = await calculateLeaveDays(startDate, endDate, input.duration, existing.employeeId)
+  if (days <= 0) {
+    throw new ValidationError("The selected range doesn't include any working days")
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (existing.status === "APPROVED" && existing.leaveType.isPaid) {
+      const oldYear = existing.startDate.getUTCFullYear()
+      await tx.leaveBalance.updateMany({
+        where: { employeeId: existing.employeeId, leaveTypeId: existing.leaveTypeId, year: oldYear },
+        data: { used: { decrement: existing.days } },
+      })
+    }
+
+    if (input.status === "APPROVED" && newLeaveType.isPaid) {
+      const newYear = startDate.getUTCFullYear()
+      await tx.leaveBalance.upsert({
+        where: { employeeId_leaveTypeId_year: { employeeId: existing.employeeId, leaveTypeId: newLeaveType.id, year: newYear } },
+        update: { used: { increment: days } },
+        create: {
+          employeeId: existing.employeeId,
+          leaveTypeId: newLeaveType.id,
+          year: newYear,
+          allocated: newLeaveType.defaultDaysPerYear,
+          used: days,
+        },
+      })
+    }
+
+    return tx.leaveRequest.update({
+      where: { id },
+      data: {
+        leaveTypeId: newLeaveType.id,
+        startDate,
+        endDate,
+        duration: input.duration,
+        days,
+        reason: input.reason,
+        status: input.status,
+      },
+    })
+  })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "LEAVE_CORRECTED",
+    entityType: "LeaveRequest",
+    entityId: id,
+    metadata: { previousStatus: existing.status, newStatus: input.status },
     ...meta,
   })
 

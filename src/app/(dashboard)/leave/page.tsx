@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireSession } from "@/features/auth/session";
-import { canActAsHr } from "@/features/leave/authorization";
+import { canActAsHr, canViewTeamLeave } from "@/features/leave/authorization";
 import { listLeaveTypes, getLeaveBalances, listLeaveRequests } from "@/features/leave/queries";
 import { ApplyLeaveDialog } from "@/features/leave/components/apply-leave-dialog";
 import { LeaveBalanceCards } from "@/features/leave/components/leave-balance-cards";
 import { LeaveHistoryTable } from "@/features/leave/components/leave-history-table";
 import { LeaveApprovalsTable } from "@/features/leave/components/leave-approvals-table";
+import { LeaveAllRequestsTable } from "@/features/leave/components/leave-all-requests-table";
 import { LeaveCalendar } from "@/features/leave/components/leave-calendar";
 
 export const metadata: Metadata = { title: "Leave | EMS" };
@@ -22,10 +23,12 @@ export default async function LeavePage({
   const isManager = session.role === "MANAGER";
   const isHr = canActAsHr(session.role);
   const showApprovalsTab = isManager || isHr;
+  const showAllRequestsTab = canViewTeamLeave(session.role);
   const hasEmployeeProfile = !!session.employeeId;
   const visibleTabs = [
     ...(hasEmployeeProfile ? ["my"] : []),
     ...(showApprovalsTab ? ["approvals"] : []),
+    ...(showAllRequestsTab ? ["all"] : []),
     "calendar",
   ];
   const defaultTab =
@@ -51,6 +54,7 @@ export default async function LeavePage({
         <TabsList>
           {hasEmployeeProfile && <TabsTrigger value="my">My Leave</TabsTrigger>}
           {showApprovalsTab && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
+          {showAllRequestsTab && <TabsTrigger value="all">All Requests</TabsTrigger>}
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
 
@@ -79,6 +83,12 @@ export default async function LeavePage({
             ) : (
               <LeaveApprovalsTable scope="team-pending" actionType="manager" />
             )}
+          </TabsContent>
+        )}
+
+        {showAllRequestsTab && (
+          <TabsContent value="all" className="mt-4">
+            <LeaveAllRequestsTable canEdit={isHr} leaveTypes={leaveTypes} />
           </TabsContent>
         )}
 

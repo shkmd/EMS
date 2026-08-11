@@ -20,6 +20,27 @@ export const applyLeaveSchema = z
   })
 export type ApplyLeaveInput = z.infer<typeof applyLeaveSchema>
 
+export const leaveRequestStatusValues = ["PENDING", "MANAGER_APPROVED", "APPROVED", "REJECTED", "CANCELLED"] as const
+
+export const leaveRequestUpdateSchema = z
+  .object({
+    leaveTypeId: z.string().min(1, "Leave type is required"),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().min(1, "End date is required"),
+    duration: z.enum(leaveDurationValues),
+    reason: z.string().min(1, "Reason is required").max(1000),
+    status: z.enum(leaveRequestStatusValues),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: "End date must be on or after the start date",
+    path: ["endDate"],
+  })
+  .refine((data) => data.duration === "FULL_DAY" || data.startDate === data.endDate, {
+    message: "Half-day leave must be a single day",
+    path: ["duration"],
+  })
+export type LeaveRequestUpdateInput = z.infer<typeof leaveRequestUpdateSchema>
+
 export const leaveActionSchema = z.object({
   action: z.enum(["APPROVE", "REJECT"]),
   comment: z.string().optional(),
