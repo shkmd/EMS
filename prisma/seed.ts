@@ -16,6 +16,17 @@ const SEED_SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL ?? "admin@ems.
 const SEED_SUPER_ADMIN_PASSWORD = process.env.SEED_SUPER_ADMIN_PASSWORD ?? "ChangeMe123!"
 const DEFAULT_PASSWORD = "Password123!"
 
+// Demo departments/employees/attendance/leave-request data is only for
+// bootstrapping a FRESH dev/demo database — this migrate step (and its
+// seed) runs on every single deploy, so without this gate, deleting a demo
+// department or account in production would just have it silently
+// resurrected by the next deploy's upsert-by-name/email (exactly what
+// happened here: a customer explicitly removed 6 demo departments and 4
+// demo accounts, and the very next deploy brought all of it back). Defaults
+// off; set SEED_DEMO_DATA=true only for a brand new environment that wants
+// the sample data to start from.
+const SEED_DEMO_DATA = process.env.SEED_DEMO_DATA === "true"
+
 async function hash(plain: string) {
   return bcrypt.hash(plain, 12)
 }
@@ -99,6 +110,11 @@ async function main() {
       update: {},
       create: { name: def.name, date: new Date(def.date), type: def.type },
     })
+  }
+
+  if (!SEED_DEMO_DATA) {
+    console.log("Seed complete (SEED_DEMO_DATA not set — skipped demo departments/employees/leave/attendance).")
+    return
   }
 
   console.log("Seeding departments & designations...")
