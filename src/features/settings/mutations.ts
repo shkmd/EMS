@@ -8,6 +8,7 @@ import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageSettings } from "@/features/settings/authorization"
 import { encryptSecret } from "@/features/settings/lib/crypto"
+import { saveUploadedFile, deleteUploadedFile, assertAllowedFile, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
 import type {
   CompanySettingsInput,
   WorkingHoursSettingsInput,
@@ -38,10 +39,34 @@ export async function updateCompanySettings(input: CompanySettingsInput, viewer:
     timezone: input.timezone,
     currency: input.currency,
     dateFormat: input.dateFormat,
+    primaryColor: optionalStr(input.primaryColor),
+    fontFamily: optionalStr(input.fontFamily),
   }
 
   const settings = await prisma.companySettings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } })
   await recordAuditLog({ userId: viewer.sub, action: "SETTINGS_COMPANY_UPDATED", entityType: "CompanySettings", entityId: "1", ...meta })
+  return settings
+}
+
+export async function uploadCompanyLogo(file: File, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  assertAllowedFile(file, ALLOWED_PHOTO_MIME_TYPES)
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { relativePath } = await saveUploadedFile(buffer, "company/logo", file.name)
+
+  const existing = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { logoUrl: true } })
+  if (existing?.logoUrl) {
+    await deleteUploadedFile(existing.logoUrl)
+  }
+
+  const settings = await prisma.companySettings.upsert({
+    where: { id: 1 },
+    update: { logoUrl: relativePath },
+    create: { id: 1, logoUrl: relativePath },
+  })
+
+  await recordAuditLog({ userId: viewer.sub, action: "SETTINGS_LOGO_UPDATED", entityType: "CompanySettings", entityId: "1", ...meta })
   return settings
 }
 

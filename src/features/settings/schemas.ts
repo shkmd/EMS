@@ -2,6 +2,15 @@ import { z } from "zod"
 
 export const WEEKDAY_VALUES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const
 
+export const FONT_FAMILY_VALUES = ["inter", "roboto", "poppins", "open-sans", "lato"] as const
+export const FONT_FAMILY_LABELS: Record<(typeof FONT_FAMILY_VALUES)[number], string> = {
+  inter: "Inter (default)",
+  roboto: "Roboto",
+  poppins: "Poppins",
+  "open-sans": "Open Sans",
+  lato: "Lato",
+}
+
 export const companySettingsSchema = z.object({
   companyName: z.string().min(1, "Company name is required").max(150),
   address: z.string().optional(),
@@ -11,6 +20,12 @@ export const companySettingsSchema = z.object({
   timezone: z.string().min(1, "Timezone is required"),
   currency: z.string().min(1, "Currency is required").max(10),
   dateFormat: z.string().min(1, "Date format is required"),
+  primaryColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #6366f1")
+    .optional()
+    .or(z.literal("")),
+  fontFamily: z.enum(FONT_FAMILY_VALUES).optional(),
 })
 export type CompanySettingsInput = z.infer<typeof companySettingsSchema>
 

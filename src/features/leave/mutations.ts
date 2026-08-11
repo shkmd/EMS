@@ -8,7 +8,12 @@ import { getEnv } from "@/config/env"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/leave/authorization"
 import { calculateLeaveDays } from "@/features/leave/lib/calculate-days"
-import type { ApplyLeaveInput, LeaveActionInput, LeaveRequestUpdateInput } from "@/features/leave/schemas"
+import type {
+  ApplyLeaveInput,
+  LeaveActionInput,
+  LeaveRequestUpdateInput,
+  LeaveRequestCreateForEmployeeInput,
+} from "@/features/leave/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
@@ -319,6 +324,75 @@ export async function updateLeaveRequest(id: string, input: LeaveRequestUpdateIn
   })
 
   return updated
+}
+
+/** HR-only creation of a leave request on behalf of an employee, dated in
+ * the past — for backfilling leave taken before the employee started using
+ * the portal. Unlike applyLeave, this skips the insufficient-balance check:
+ * the leave already happened, so the balance is what needs to catch up to
+ * reality, not the other way around. */
+export async function createLeaveRequestForEmployee(
+  input: LeaveRequestCreateForEmployeeInput,
+  viewer: AccessTokenPayload,
+  meta: Meta
+) {
+  if (!canActAsHr(viewer.role)) throw new ForbiddenError()
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: input.employeeId, deletedAt: null },
+    select: { id: true },
+  })
+  if (!employee) throw new NotFoundError("Employee not found")
+
+  const leaveType = await prisma.leaveType.findUnique({ where: { id: input.leaveTypeId } })
+  if (!leaveType) throw new ValidationError("Invalid leave type")
+
+  const startDate = new Date(input.startDate)
+  const endDate = new Date(input.endDate)
+  const days = await calculateLeaveDays(startDate, endDate, input.duration, employee.id)
+  if (days <= 0) {
+    throw new ValidationError("The selected range doesn't include any working days")
+  }
+
+  const hrEmployeeId = viewer.employeeId ?? null
+
+  const created = await prisma.$transaction(async (tx) => {
+    const request = await tx.leaveRequest.create({
+      data: {
+        employeeId: employee.id,
+        leaveTypeId: leaveType.id,
+        startDate,
+        endDate,
+        duration: input.duration,
+        days,
+        reason: input.reason,
+        status: input.status,
+        ...(input.status === "APPROVED" ? { hrId: hrEmployeeId, hrActionAt: new Date() } : {}),
+      },
+    })
+
+    if (input.status === "APPROVED" && leaveType.isPaid) {
+      const year = startDate.getUTCFullYear()
+      await tx.leaveBalance.upsert({
+        where: { employeeId_leaveTypeId_year: { employeeId: employee.id, leaveTypeId: leaveType.id, year } },
+        update: { used: { increment: days } },
+        create: { employeeId: employee.id, leaveTypeId: leaveType.id, year, allocated: leaveType.defaultDaysPerYear, used: days },
+      })
+    }
+
+    return request
+  })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "LEAVE_RECORDED",
+    entityType: "LeaveRequest",
+    entityId: created.id,
+    metadata: { employeeId: employee.id, status: input.status },
+    ...meta,
+  })
+
+  return created
 }
 
 export async function cancelLeave(id: string, viewer: AccessTokenPayload, meta: Meta) {

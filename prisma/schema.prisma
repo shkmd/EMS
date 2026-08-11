@@ -1076,17 +1076,19 @@ model TaskActivity {
 // ============================================================================
 
 model CompanySettings {
-  id          Int      @id @default(1)
-  companyName String   @default("My Company")
-  logoUrl     String?
-  address     String?  @db.Text
-  phone       String?
-  email       String?
-  website     String?
-  timezone    String   @default("UTC")
-  currency    String   @default("USD")
-  dateFormat  String   @default("dd MMM yyyy")
-  updatedAt   DateTime @updatedAt
+  id           Int      @id @default(1)
+  companyName  String   @default("My Company")
+  logoUrl      String?
+  primaryColor String?
+  fontFamily   String?
+  address      String?  @db.Text
+  phone        String?
+  email        String?
+  website      String?
+  timezone     String   @default("UTC")
+  currency     String   @default("USD")
+  dateFormat   String   @default("dd MMM yyyy")
+  updatedAt    DateTime @updatedAt
 
   @@map("company_settings")
 }

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { apiFetch } from "@/lib/api-client"
 import { LEAVE_STATUS_BADGE, LEAVE_STATUS_LABELS } from "@/features/leave/lib/status-labels"
 import { EditLeaveRequestDialog } from "@/features/leave/components/edit-leave-request-dialog"
+import { RecordPastLeaveDialog } from "@/features/leave/components/record-past-leave-dialog"
 import type { LeaveRequestUpdateInput } from "@/features/leave/schemas"
 
 type RequestRow = {
@@ -64,6 +65,11 @@ export function LeaveAllRequestsTable({
   return (
     <Card>
       <CardContent className="pt-6">
+        {canEdit && (
+          <div className="mb-4 flex justify-end">
+            <RecordPastLeaveDialog leaveTypes={leaveTypes} onSaved={load} />
+          </div>
+        )}
         {!requests ? (
           <Skeleton className="h-48 w-full" />
         ) : (

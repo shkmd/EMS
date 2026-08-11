@@ -16,6 +16,10 @@ const PUBLIC_API_PATHS = [
   // script, which has no session cookie. Authenticated by its own shared
   // API-key check (see assertValidApiKey in the route handler) instead.
   "/api/integrations/biometric/punch",
+  // The company logo is shown on the public login page and in the sidebar
+  // for every user — GET has no sensitive data. POST still requires a
+  // session via requireSession() inside the route handler itself.
+  "/api/settings/logo",
 ]
 
 function isPublicPath(pathname: string) {

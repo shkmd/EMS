@@ -22,7 +22,15 @@ import { NAV_GROUPS } from "@/components/layout/nav-items"
 import { apiFetch } from "@/lib/api-client"
 import type { Role } from "@prisma/client"
 
-export function AppSidebar({ role }: { role: Role }) {
+export function AppSidebar({
+  role,
+  companyName,
+  hasLogo,
+}: {
+  role: Role
+  companyName: string
+  hasLogo: boolean
+}) {
   const pathname = usePathname()
   const [unreadMessages, setUnreadMessages] = useState(0)
 
@@ -40,10 +48,15 @@ export function AppSidebar({ role }: { role: Role }) {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Building2 className="size-4" />
-          </div>
-          <span className="font-semibold group-data-[collapsible=icon]:hidden">EMS</span>
+          {hasLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/api/settings/logo" alt={companyName} className="size-7 shrink-0 rounded-lg object-contain" />
+          ) : (
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Building2 className="size-4" />
+            </div>
+          )}
+          <span className="font-semibold group-data-[collapsible=icon]:hidden">{companyName}</span>
         </div>
       </SidebarHeader>
       <SidebarContent>

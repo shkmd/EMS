@@ -4,7 +4,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { getSession } from "@/features/auth/session";
-import { isMaintenanceModeEnabled } from "@/features/settings/queries";
+import { isMaintenanceModeEnabled, getCompanySettings } from "@/features/settings/queries";
 import { ActivityTracker } from "@/features/activity/components/activity-tracker";
 import { CallProvider } from "@/features/messaging/components/call-provider";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [user, maintenanceMode] = await Promise.all([
+  const [user, maintenanceMode, companySettings] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.sub },
       select: {
@@ -23,6 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       },
     }),
     isMaintenanceModeEnabled(),
+    getCompanySettings(),
   ]);
   if (!user) redirect("/login");
 
@@ -45,7 +46,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <CallProvider currentUserId={session.sub} currentUserName={displayName}>
       <SidebarProvider>
         {session.employeeId && <ActivityTracker />}
-        <AppSidebar role={user.role} />
+        <AppSidebar role={user.role} companyName={companySettings.companyName} hasLogo={!!companySettings.logoUrl} />
         <SidebarInset>
           <Topbar
             name={displayName}
