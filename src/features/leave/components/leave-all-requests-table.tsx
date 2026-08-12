@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { format, isSameDay } from "date-fns"
-import { Pencil } from "lucide-react"
+import { Eye, Pencil } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,7 @@ import { apiFetch } from "@/lib/api-client"
 import { LEAVE_STATUS_BADGE, LEAVE_STATUS_LABELS } from "@/features/leave/lib/status-labels"
 import { EditLeaveRequestDialog } from "@/features/leave/components/edit-leave-request-dialog"
 import { RecordPastLeaveDialog } from "@/features/leave/components/record-past-leave-dialog"
+import { LeaveRequestDetailDialog } from "@/features/leave/components/leave-request-detail-dialog"
 import type { LeaveRequestUpdateInput } from "@/features/leave/schemas"
 
 type RequestRow = {
@@ -24,8 +25,15 @@ type RequestRow = {
   days: number
   reason: string
   status: string
+  createdAt: string
   leaveType: { id: string; name: string }
   employee: { id: string; firstName: string; lastName: string; profilePhotoUrl: string | null }
+  manager: { firstName: string; lastName: string } | null
+  managerActionAt: string | null
+  managerComment: string | null
+  hr: { firstName: string; lastName: string } | null
+  hrActionAt: string | null
+  hrComment: string | null
 }
 
 function initials(firstName: string, lastName: string) {
@@ -41,6 +49,7 @@ export function LeaveAllRequestsTable({
 }) {
   const [requests, setRequests] = useState<RequestRow[] | null>(null)
   const [editing, setEditing] = useState<RequestRow | null>(null)
+  const [viewing, setViewing] = useState<RequestRow | null>(null)
 
   async function load() {
     const result = await apiFetch<{ requests: RequestRow[] }>("/api/leave?scope=all")
@@ -83,13 +92,13 @@ export function LeaveAllRequestsTable({
                   <TableHead>Days</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reason</TableHead>
-                  {canEdit && <TableHead className="w-10" />}
+                  <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {requests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 7 : 6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No leave requests found.
                     </TableCell>
                   </TableRow>
@@ -120,13 +129,18 @@ export function LeaveAllRequestsTable({
                         <Badge className={LEAVE_STATUS_BADGE[r.status]}>{LEAVE_STATUS_LABELS[r.status] ?? r.status}</Badge>
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-muted-foreground">{r.reason}</TableCell>
-                      {canEdit && (
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="size-7" title="Correct this request" onClick={() => setEditing(r)}>
-                            <Pencil className="size-3.5" />
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="size-7" title="View full details" onClick={() => setViewing(r)}>
+                            <Eye className="size-3.5" />
                           </Button>
-                        </TableCell>
-                      )}
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" className="size-7" title="Correct this request" onClick={() => setEditing(r)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -135,6 +149,14 @@ export function LeaveAllRequestsTable({
           </div>
         )}
       </CardContent>
+
+      <LeaveRequestDetailDialog
+        request={viewing}
+        open={!!viewing}
+        onOpenChange={(next) => {
+          if (!next) setViewing(null)
+        }}
+      />
 
       {canEdit && (
         <EditLeaveRequestDialog

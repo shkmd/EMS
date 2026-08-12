@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { format } from "date-fns"
-import { Pencil } from "lucide-react"
+import { Eye, Pencil } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { apiFetch } from "@/lib/api-client"
 import { ATTENDANCE_STATUS_BADGE, ATTENDANCE_STATUS_LABELS } from "@/features/attendance/lib/status"
 import { ManualAttendanceDialog } from "@/features/attendance/components/manual-attendance-dialog"
+import { AttendanceDetailDialog } from "@/features/attendance/components/attendance-detail-dialog"
 import type { ManualAttendanceInput } from "@/features/attendance/schemas"
 
 type Break = { id: string; breakStart: string; breakEnd: string | null }
@@ -73,6 +74,7 @@ export function TeamAttendanceTable({
 }) {
   const [team, setTeam] = useState<TeamMember[] | null>(null)
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [viewingMember, setViewingMember] = useState<TeamMember | null>(null)
 
   function loadTeam() {
     apiFetch<{ team: TeamMember[] }>("/api/attendance/team").then((result) => {
@@ -119,13 +121,13 @@ export function TeamAttendanceTable({
                   <TableHead>Break</TableHead>
                   <TableHead>Screen Time</TableHead>
                   <TableHead>Today&apos;s Update</TableHead>
-                  {canManage && <TableHead className="w-10" />}
+                  <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 9 : 8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                       No team members found.
                     </TableCell>
                   </TableRow>
@@ -204,19 +206,30 @@ export function TeamAttendanceTable({
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      {canManage && (
-                        <TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7"
-                            title={member.today ? "Correct today's attendance" : "Mark attendance"}
-                            onClick={() => setEditingMember(member)}
+                            title="View full details"
+                            onClick={() => setViewingMember(member)}
                           >
-                            <Pencil className="size-3.5" />
+                            <Eye className="size-3.5" />
                           </Button>
-                        </TableCell>
-                      )}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7"
+                              title={member.today ? "Correct today's attendance" : "Mark attendance"}
+                              onClick={() => setEditingMember(member)}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -225,6 +238,14 @@ export function TeamAttendanceTable({
           </div>
         )}
       </CardContent>
+
+      <AttendanceDetailDialog
+        member={viewingMember}
+        open={!!viewingMember}
+        onOpenChange={(next) => {
+          if (!next) setViewingMember(null)
+        }}
+      />
 
       {canManage && (
         <ManualAttendanceDialog
