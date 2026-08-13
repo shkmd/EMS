@@ -83,6 +83,14 @@ enum AttendanceStatus {
   COMPENSATORY_OFF
   PERMISSION
   WORK_ON_HOLIDAY
+  // Marking a day with one of these directly (instead of the generic LEAVE)
+  // also deducts from the matching LeaveType's balance — see
+  // adjustLeaveBalanceForAttendance in features/attendance/mutations.ts.
+  // Values are deliberately the same strings as LeaveType.code.
+  CL
+  SL
+  EL
+  LOP
 }
 
 enum LeaveRequestStatus {

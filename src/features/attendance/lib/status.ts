@@ -10,6 +10,10 @@ export const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
   COMPENSATORY_OFF: "Compensatory Off",
   PERMISSION: "Permission",
   WORK_ON_HOLIDAY: "Work On Holiday",
+  CL: "Casual Leave",
+  SL: "Sick Leave",
+  EL: "Earned Leave",
+  LOP: "Loss of Pay",
 }
 
 // Short codes for compact display (calendar cells, legend) — mirrors the
@@ -26,6 +30,10 @@ export const ATTENDANCE_STATUS_CODE: Record<string, string> = {
   COMPENSATORY_OFF: "CO",
   PERMISSION: "PR",
   WORK_ON_HOLIDAY: "WOH",
+  CL: "CL",
+  SL: "SL",
+  EL: "EL",
+  LOP: "LOP",
 }
 
 // Fixed status -> Tailwind classes, so a status keeps its color regardless
@@ -46,6 +54,10 @@ export const ATTENDANCE_STATUS_DOT: Record<string, string> = {
   COMPENSATORY_OFF: "bg-orange-500",
   PERMISSION: "bg-pink-500",
   WORK_ON_HOLIDAY: "bg-indigo-500",
+  CL: "bg-fuchsia-500",
+  SL: "bg-rose-500",
+  EL: "bg-lime-500",
+  LOP: "bg-stone-500",
 }
 
 export const ATTENDANCE_STATUS_BADGE: Record<string, string> = {
@@ -60,4 +72,8 @@ export const ATTENDANCE_STATUS_BADGE: Record<string, string> = {
   COMPENSATORY_OFF: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   PERMISSION: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
   WORK_ON_HOLIDAY: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
+  CL: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
+  SL: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  EL: "bg-lime-500/10 text-lime-700 dark:text-lime-400",
+  LOP: "bg-stone-500/10 text-stone-700 dark:text-stone-400",
 }

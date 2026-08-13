@@ -1,6 +1,7 @@
 import "server-only"
 
 import { differenceInMinutes } from "date-fns"
+import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { toUtcDateOnly, utcDayRange } from "@/lib/date-only"
@@ -11,9 +12,43 @@ import { canManageAttendance } from "@/features/attendance/authorization"
 import { getWorkingHoursForEmployee } from "@/features/verticals/queries"
 import { getCompanySettings } from "@/features/settings/queries"
 import { zonedTimeToUtc } from "@/lib/timezone"
-import type { ManualAttendanceInput } from "@/features/attendance/schemas"
+import { LEAVE_CODE_ATTENDANCE_STATUSES, type ManualAttendanceInput } from "@/features/attendance/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
+
+const LEAVE_CODE_STATUS_SET: ReadonlySet<string> = new Set(LEAVE_CODE_ATTENDANCE_STATUSES)
+
+// Marking a day CL/SL/EL/LOP directly in attendance also moves that leave
+// type's balance, same as an approved leave request would — 1 attendance
+// row is always exactly 1 day. `direction` is +1 when applying, -1 when
+// reversing (status changed away from a leave code, or the record was
+// deleted). Unpaid types (LOP) carry no tracked balance, matching how
+// leave requests already skip balance math for `!leaveType.isPaid`.
+async function adjustLeaveBalanceForAttendance(
+  tx: Prisma.TransactionClient,
+  employeeId: string,
+  statusCode: string,
+  date: Date,
+  direction: 1 | -1
+) {
+  const leaveType = await tx.leaveType.findUnique({ where: { code: statusCode } })
+  if (!leaveType || !leaveType.isPaid) return
+
+  const year = date.getUTCFullYear()
+
+  if (direction === 1) {
+    await tx.leaveBalance.upsert({
+      where: { employeeId_leaveTypeId_year: { employeeId, leaveTypeId: leaveType.id, year } },
+      update: { used: { increment: 1 } },
+      create: { employeeId, leaveTypeId: leaveType.id, year, allocated: leaveType.defaultDaysPerYear, used: 1 },
+    })
+  } else {
+    await tx.leaveBalance.updateMany({
+      where: { employeeId, leaveTypeId: leaveType.id, year },
+      data: { used: { decrement: 1 } },
+    })
+  }
+}
 
 function requireSelfEmployeeId(viewer: AccessTokenPayload) {
   if (!viewer.employeeId) {
@@ -183,18 +218,34 @@ export async function upsertManualAttendance(input: ManualAttendanceInput, viewe
   const checkOutAt = input.checkOut ? zonedTimeToUtc(input.date, input.checkOut, timezone) : null
   const workingMinutes = checkIn && checkOutAt ? Math.max(0, differenceInMinutes(checkOutAt, checkIn)) : 0
 
-  const record = await prisma.attendance.upsert({
+  const existing = await prisma.attendance.findUnique({
     where: { employeeId_date: { employeeId: input.employeeId, date } },
-    update: { status: input.status, checkIn, checkOut: checkOutAt, workingMinutes, notes: input.notes || null },
-    create: {
-      employeeId: input.employeeId,
-      date,
-      status: input.status,
-      checkIn,
-      checkOut: checkOutAt,
-      workingMinutes,
-      notes: input.notes || null,
-    },
+  })
+
+  const record = await prisma.$transaction(async (tx) => {
+    if (existing && LEAVE_CODE_STATUS_SET.has(existing.status)) {
+      await adjustLeaveBalanceForAttendance(tx, input.employeeId, existing.status, date, -1)
+    }
+
+    const saved = await tx.attendance.upsert({
+      where: { employeeId_date: { employeeId: input.employeeId, date } },
+      update: { status: input.status, checkIn, checkOut: checkOutAt, workingMinutes, notes: input.notes || null },
+      create: {
+        employeeId: input.employeeId,
+        date,
+        status: input.status,
+        checkIn,
+        checkOut: checkOutAt,
+        workingMinutes,
+        notes: input.notes || null,
+      },
+    })
+
+    if (LEAVE_CODE_STATUS_SET.has(input.status)) {
+      await adjustLeaveBalanceForAttendance(tx, input.employeeId, input.status, date, 1)
+    }
+
+    return saved
   })
 
   await recordAuditLog({
@@ -215,7 +266,12 @@ export async function deleteAttendance(id: string, viewer: AccessTokenPayload, m
   const existing = await prisma.attendance.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Attendance record not found")
 
-  await prisma.attendance.delete({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    if (LEAVE_CODE_STATUS_SET.has(existing.status)) {
+      await adjustLeaveBalanceForAttendance(tx, existing.employeeId, existing.status, existing.date, -1)
+    }
+    await tx.attendance.delete({ where: { id } })
+  })
 
   await recordAuditLog({
     userId: viewer.sub,

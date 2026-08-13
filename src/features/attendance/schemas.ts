@@ -27,7 +27,16 @@ export const attendanceStatusValues = [
   "COMPENSATORY_OFF",
   "PERMISSION",
   "WORK_ON_HOLIDAY",
+  "CL",
+  "SL",
+  "EL",
+  "LOP",
 ] as const
+
+// Attendance statuses that also deduct a day from the matching LeaveType's
+// balance (looked up by LeaveType.code) when marked — see
+// adjustLeaveBalanceForAttendance in features/attendance/mutations.ts.
+export const LEAVE_CODE_ATTENDANCE_STATUSES = ["CL", "SL", "EL", "LOP"] as const
 
 export const manualAttendanceSchema = z.object({
   employeeId: z.string().min(1, "Employee is required"),
