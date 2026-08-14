@@ -50,6 +50,21 @@ const envSchema = z.object({
   // (no ICE servers returned) if unset.
   TURN_SECRET: optionalEnvString(z.string().min(16)),
   TURN_HOST: optionalEnvString(z.string()),
+
+  // Twilio WhatsApp Business API — optional. Without these, WhatsApp
+  // reminders are skipped (logged, not sent), same fallback pattern as SMTP.
+  TWILIO_ACCOUNT_SID: optionalEnvString(z.string().min(1)),
+  TWILIO_AUTH_TOKEN: optionalEnvString(z.string().min(1)),
+  // Twilio's own "whatsapp:+1415..." sender format.
+  TWILIO_WHATSAPP_FROM: optionalEnvString(z.string().min(1)),
+
+  // Web Push (VAPID) — self-generated keypair, no external account needed.
+  // Prefixed NEXT_PUBLIC_ so Next.js inlines it into the client bundle too
+  // (needed for pushManager.subscribe()) — it isn't secret, only the
+  // private key is. Push is skipped (logged, not sent) if unset.
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: optionalEnvString(z.string().min(1)),
+  VAPID_PRIVATE_KEY: optionalEnvString(z.string().min(1)),
+  VAPID_SUBJECT: z.string().default("mailto:admin@ems.local"),
 })
 
 type Env = z.infer<typeof envSchema>

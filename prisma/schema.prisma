@@ -189,6 +189,18 @@ enum NotificationType {
   ERROR
 }
 
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  ONE_TIME
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
 enum ProjectStatus {
   ACTIVE
   ARCHIVED
@@ -229,6 +241,7 @@ model User {
   refreshTokens              RefreshToken[]
   auditLogs                  AuditLog[]
   notifications              Notification[]
+  pushSubscriptions          PushSubscription[]
   employeeNotes              EmployeeNote[]
   announcements              Announcement[]
   reviewsGiven               PerformanceReview[]       @relation("ReviewerUser")
@@ -429,6 +442,7 @@ model Employee {
   assetAssignments       AssetAssignment[]
   notifications          Notification[]
   taskAssignments        TaskAssignee[]
+  subscriptionsToNotify  Subscription[]
 
   @@index([departmentId])
   @@index([designationId])
@@ -881,6 +895,49 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// A registered browser/device Web Push endpoint for a user — created when
+// they click "Enable notifications" and grant the browser permission
+// prompt. A user can have several (one per device/browser).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @db.VarChar(500)
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@map("push_subscriptions")
+}
+
+// Company-wide subscriptions/licenses (software tools, domains, SaaS
+// renewals) that HR/Admin track — reminded via in-app, email, WhatsApp, and
+// push 7 days before `endDate`. `reminderSentAt` dedupes the daily
+// scheduler check so the same renewal doesn't fire more than once.
+model Subscription {
+  id               String             @id @default(cuid())
+  name             String
+  vendor           String?
+  category         String?
+  cost             Decimal?           @db.Decimal(12, 2)
+  billingCycle     BillingCycle       @default(YEARLY)
+  startDate        DateTime?          @db.Date
+  endDate          DateTime           @db.Date
+  notifyEmployeeId String?
+  notes            String?            @db.Text
+  status           SubscriptionStatus @default(ACTIVE)
+  reminderSentAt   DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  notifyEmployee Employee? @relation(fields: [notifyEmployeeId], references: [id], onDelete: SetNull)
+
+  @@index([endDate])
+  @@map("subscriptions")
 }
 
 // ============================================================================

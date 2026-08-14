@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
-import { Bell, BellOff, CheckCheck } from "lucide-react"
+import { toast } from "sonner"
+import { Bell, BellOff, BellPlus, CheckCheck, Loader2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { apiFetch } from "@/lib/api-client"
+import {
+  isPushSupported,
+  getPushSubscriptionState,
+  enablePushNotifications,
+  disablePushNotifications,
+} from "@/lib/push-client"
 
 type NotificationItem = {
   id: string
@@ -30,6 +37,32 @@ export function NotificationsMenu() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [pushState, setPushState] = useState<"unsupported" | "denied" | "subscribed" | "unsubscribed">("unsupported")
+  const [pushBusy, setPushBusy] = useState(false)
+
+  useEffect(() => {
+    if (isPushSupported()) getPushSubscriptionState().then(setPushState)
+  }, [])
+
+  async function handleTogglePush() {
+    setPushBusy(true)
+    try {
+      if (pushState === "subscribed") {
+        await disablePushNotifications()
+        setPushState("unsubscribed")
+        toast.success("Push notifications turned off on this device")
+      } else {
+        await enablePushNotifications()
+        setPushState("subscribed")
+        toast.success("Push notifications enabled on this device")
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong")
+      setPushState(await getPushSubscriptionState())
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   async function load() {
     const result = await apiFetch<{ items: NotificationItem[]; unreadCount: number }>("/api/notifications")
@@ -123,6 +156,18 @@ export function NotificationsMenu() {
         >
           View all notifications
         </Button>
+        {pushState !== "unsupported" && pushState !== "denied" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-center text-xs"
+            onClick={handleTogglePush}
+            disabled={pushBusy}
+          >
+            {pushBusy ? <Loader2 className="animate-spin" /> : <BellPlus />}
+            {pushState === "subscribed" ? "Turn off notifications on this device" : "Enable notifications on this device"}
+          </Button>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

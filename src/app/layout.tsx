@@ -34,6 +34,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EMS | Employee Management System",
   description: "Modern HR management system — employees, attendance, leave, payroll and more.",
+  manifest: "/manifest.json",
 };
 
 // The root layout now reads CompanySettings on every render so branding

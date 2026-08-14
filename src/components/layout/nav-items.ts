@@ -17,6 +17,7 @@ import {
   Receipt,
   MessageSquare,
   FolderKanban,
+  BellRing,
 } from "lucide-react"
 
 import type { Role } from "@prisma/client"
@@ -75,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Assets", href: "/assets", icon: Laptop },
       { label: "Announcements", href: "/announcements", icon: Megaphone },
       { label: "Messages", href: "/messages", icon: MessageSquare },
+      { label: "Subscriptions", href: "/subscriptions", icon: BellRing, roles: ["SUPER_ADMIN", "HR"] },
     ],
   },
   {
