@@ -15,6 +15,7 @@ import { EmployeeOverview } from "@/features/employees/components/employee-overv
 import { EmployeeNotes } from "@/features/employees/components/employee-notes";
 import { EmployeeDocuments } from "@/features/employees/components/employee-documents";
 import { EmployeeTimeline } from "@/features/employees/components/employee-timeline";
+import { OffboardingTab } from "@/features/offboarding/components/offboarding-tab";
 import { EmployeePhotoUpload } from "@/features/employees/components/employee-photo-upload";
 import { PrintProfileButton } from "@/features/employees/components/print-profile-button";
 import { AccountAccessCard } from "@/features/employees/components/account-access-card";
@@ -31,9 +32,19 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   TERMINATED: "destructive",
 };
 
-export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const VALID_TABS = ["overview", "documents", "notes", "timeline", "offboarding"];
+
+export default async function EmployeeDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await requireSession();
   const { id } = await params;
+  const { tab } = await searchParams;
+  const defaultTab = tab && VALID_TABS.includes(tab) ? tab : "overview";
 
   let employee: Awaited<ReturnType<typeof getEmployeeDetail>>;
   try {
@@ -102,12 +113,13 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         </Card>
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={defaultTab}>
         <TabsList className="print:hidden">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          {canManage && <TabsTrigger value="offboarding">Offboarding</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview" className="mt-3">
           <EmployeeOverview employee={employee} />
@@ -133,6 +145,11 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             </CardContent>
           </Card>
         </TabsContent>
+        {canManage && (
+          <TabsContent value="offboarding" className="mt-3">
+            <OffboardingTab employeeId={employee.id} employeeStatus={employee.status} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
