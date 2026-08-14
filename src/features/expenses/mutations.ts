@@ -3,34 +3,13 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { ValidationError, ForbiddenError, NotFoundError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
-import { sendMail, portalNotificationEmailTemplate } from "@/lib/mail"
-import { getEnv } from "@/config/env"
+import { notifyUser } from "@/lib/notify"
 import { saveUploadedFile, assertAllowedFile, ALLOWED_DOCUMENT_MIME_TYPES } from "@/lib/storage"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/expenses/authorization"
 import type { ExpenseClaimFormInput, ExpenseActionInput } from "@/features/expenses/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
-
-async function notifyUser(userId: string, employeeId: string | null, title: string, message: string, link: string) {
-  try {
-    await prisma.notification.create({
-      data: { userId, employeeId, type: "INFO", title, message, link },
-    })
-  } catch (error) {
-    console.error("Failed to create notification:", error)
-  }
-
-  try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, isActive: true } })
-    if (user?.isActive) {
-      const actionUrl = `${getEnv().NEXT_PUBLIC_APP_URL}${link}`
-      await sendMail({ to: user.email, ...portalNotificationEmailTemplate(title, message, actionUrl) })
-    }
-  } catch (error) {
-    console.error("Failed to send expense notification email:", error)
-  }
-}
 
 async function notifyHrUsers(title: string, message: string, link: string) {
   const hrUsers = await prisma.user.findMany({

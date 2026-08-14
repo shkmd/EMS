@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
 import { assertAllowedFile, deleteUploadedFile, saveUploadedFile, ALLOWED_DOCUMENT_MIME_TYPES, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
-import { sendMail, portalNotificationEmailTemplate } from "@/lib/mail"
-import { getEnv } from "@/config/env"
+import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageProjects, isTaskAssignee } from "@/features/projects/authorization"
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/features/projects/lib/labels"
@@ -72,30 +71,6 @@ async function notifyTaskParticipants(
 
   const link = `/projects/${task.projectId}?task=${task.id}`
   await Promise.all(Array.from(recipients.entries()).map(([userId, employeeId]) => notifyUser(userId, employeeId, title, message, link)))
-}
-
-/**
- * In-app notification plus a real email, mirroring the Leave module's
- * notifyUser — task activity (assignment, status changes, comments,
- * attachments) should reach people even when they aren't actively in the
- * portal, the same reasoning that already applies to leave requests.
- */
-async function notifyUser(userId: string, employeeId: string | null, title: string, message: string, link: string) {
-  try {
-    await prisma.notification.create({ data: { userId, employeeId, type: "INFO", title, message, link } })
-  } catch (error) {
-    console.error("Failed to create task notification:", error)
-  }
-
-  try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, isActive: true } })
-    if (user?.isActive) {
-      const actionUrl = `${getEnv().NEXT_PUBLIC_APP_URL}${link}`
-      await sendMail({ to: user.email, ...portalNotificationEmailTemplate(title, message, actionUrl) })
-    }
-  } catch (error) {
-    console.error("Failed to send task notification email:", error)
-  }
 }
 
 // ---------- Projects ----------

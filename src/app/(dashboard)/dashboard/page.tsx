@@ -4,6 +4,9 @@ import { Users, UserCheck, UserX, UserPlus, Building2, CalendarClock, Clock, Cak
 import { Badge } from "@/components/ui/badge";
 import { requireSession } from "@/features/auth/session";
 import { canManageEmployees } from "@/features/employees/authorization";
+import { canManageSubscriptions } from "@/features/subscriptions/authorization";
+import { getUpcomingSubscriptionRenewals } from "@/features/subscriptions/queries";
+import { UpcomingRenewalsCard } from "@/features/subscriptions/components/upcoming-renewals-card";
 import { StatCard } from "@/features/dashboard/components/stat-card";
 import { VerticalFilter } from "@/features/dashboard/components/vertical-filter";
 import { EmployeeGrowthChart } from "@/features/dashboard/components/employee-growth-chart";
@@ -39,6 +42,7 @@ export default async function DashboardPage({
   const session = await requireSession();
   const { vertical: requestedVerticalId } = await searchParams;
   const canSwitchVertical = canManageEmployees(session.role);
+  const canSeeSubscriptions = canManageSubscriptions(session.role);
 
   const verticals = await listVerticals();
 
@@ -60,6 +64,7 @@ export default async function DashboardPage({
     attendanceStats,
     leaveStats,
     todayAttendance,
+    upcomingRenewals,
   ] = await Promise.all([
     getEmployeeStats(verticalId),
     getPendingLeaveRequestsCount(verticalId),
@@ -71,6 +76,7 @@ export default async function DashboardPage({
     getAttendanceStatistics(14, verticalId),
     getLeaveStatistics(verticalId),
     session.employeeId ? getTodayAttendance(session.employeeId) : Promise.resolve(null),
+    canSeeSubscriptions ? getUpcomingSubscriptionRenewals() : Promise.resolve([]),
   ]);
 
   return (
@@ -170,8 +176,9 @@ export default async function DashboardPage({
         <LeaveChart data={leaveStats} />
       </div>
 
-      <div id="celebrations" className="scroll-mt-20">
+      <div id="celebrations" className={canSeeSubscriptions ? "grid scroll-mt-20 grid-cols-1 gap-6 lg:grid-cols-2" : "scroll-mt-20"}>
         <CelebrationsCard birthdays={birthdays} anniversaries={anniversaries} />
+        {canSeeSubscriptions && <UpcomingRenewalsCard renewals={upcomingRenewals} />}
       </div>
     </div>
   );

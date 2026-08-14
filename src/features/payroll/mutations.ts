@@ -3,9 +3,15 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { ValidationError, ForbiddenError, NotFoundError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
+import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManagePayroll } from "@/features/payroll/authorization"
 import type { PayslipFormInput } from "@/features/payroll/schemas"
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+]
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
@@ -87,7 +93,10 @@ export async function generatePayslip(input: PayslipFormInput, viewer: AccessTok
 export async function markPayslipPaid(id: string, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManage(viewer)
 
-  const existing = await prisma.payslip.findUnique({ where: { id } })
+  const existing = await prisma.payslip.findUnique({
+    where: { id },
+    include: { employee: { select: { userId: true } } },
+  })
   if (!existing) throw new NotFoundError("Payslip not found")
   if (existing.status === "PAID") throw new ValidationError("This payslip is already marked as paid")
 
@@ -103,6 +112,17 @@ export async function markPayslipPaid(id: string, viewer: AccessTokenPayload, me
     entityId: id,
     ...meta,
   })
+
+  if (existing.employee.userId) {
+    const monthLabel = `${MONTH_NAMES[existing.month - 1]} ${existing.year}`
+    await notifyUser(
+      existing.employee.userId,
+      existing.employeeId,
+      "Payslip ready",
+      `Your payslip for ${monthLabel} has been marked as paid and is ready to view.`,
+      "/payroll"
+    )
+  }
 
   return payslip
 }

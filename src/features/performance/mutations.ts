@@ -3,6 +3,7 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { ValidationError, ForbiddenError, NotFoundError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
+import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageEmployeePerformance, canManagePerformance } from "@/features/performance/authorization"
 import type { GoalFormInput, KpiFormInput, ReviewFormInput, ReviewAcknowledgeInput } from "@/features/performance/schemas"
@@ -130,14 +131,6 @@ export async function deleteKpi(id: string, viewer: AccessTokenPayload, meta: Me
 }
 
 // ---------- Reviews ----------
-
-async function notifyUser(userId: string, employeeId: string | null, title: string, message: string, link: string) {
-  try {
-    await prisma.notification.create({ data: { userId, employeeId, type: "INFO", title, message, link } })
-  } catch (error) {
-    console.error("Failed to create notification:", error)
-  }
-}
 
 export async function createReview(input: ReviewFormInput, viewer: AccessTokenPayload, meta: Meta) {
   await assertCanManageEmployee(input.employeeId, viewer)

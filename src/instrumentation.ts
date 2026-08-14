@@ -12,7 +12,7 @@
 // a wholly separate file is what actually keeps it out of the Edge bundle.
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { registerSubscriptionReminderScheduler } = await import("./instrumentation-node")
-    registerSubscriptionReminderScheduler()
+    const { registerSchedulers } = await import("./instrumentation-node")
+    registerSchedulers()
   }
 }

@@ -3,8 +3,7 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { ValidationError, ForbiddenError, NotFoundError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
-import { sendMail, portalNotificationEmailTemplate } from "@/lib/mail"
-import { getEnv } from "@/config/env"
+import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/leave/authorization"
 import { calculateLeaveDays } from "@/features/leave/lib/calculate-days"
@@ -16,31 +15,6 @@ import type {
 } from "@/features/leave/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
-
-async function notifyUser(userId: string, employeeId: string | null, title: string, message: string, link: string) {
-  try {
-    await prisma.notification.create({
-      data: { userId, employeeId, type: "INFO", title, message, link },
-    })
-  } catch (error) {
-    console.error("Failed to create notification:", error)
-  }
-
-  // Real email alongside the in-app notification, so leave requests and
-  // decisions reach people even when they aren't actively in the portal.
-  // The email links back to the portal action itself rather than acting
-  // one-click from the email, so approving/rejecting always goes through
-  // the same authenticated, audited API path — no separate security surface.
-  try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, isActive: true } })
-    if (user?.isActive) {
-      const actionUrl = `${getEnv().NEXT_PUBLIC_APP_URL}${link}`
-      await sendMail({ to: user.email, ...portalNotificationEmailTemplate(title, message, actionUrl) })
-    }
-  } catch (error) {
-    console.error("Failed to send leave notification email:", error)
-  }
-}
 
 async function notifyHrUsers(title: string, message: string, link: string) {
   const hrUsers = await prisma.user.findMany({
