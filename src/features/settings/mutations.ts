@@ -48,26 +48,48 @@ export async function updateCompanySettings(input: CompanySettingsInput, viewer:
   return settings
 }
 
-export async function uploadCompanyLogo(file: File, viewer: AccessTokenPayload, meta: Meta) {
+type CompanyImageField = "logoUrl" | "letterheadImageUrl" | "signatureImageUrl"
+
+async function uploadCompanyImage(
+  field: CompanyImageField,
+  subDir: string,
+  auditAction: string,
+  file: File,
+  viewer: AccessTokenPayload,
+  meta: Meta
+) {
   assertCanManage(viewer)
 
   assertAllowedFile(file, ALLOWED_PHOTO_MIME_TYPES)
   const buffer = Buffer.from(await file.arrayBuffer())
-  const { relativePath } = await saveUploadedFile(buffer, "company/logo", file.name)
+  const { relativePath } = await saveUploadedFile(buffer, subDir, file.name)
 
-  const existing = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { logoUrl: true } })
-  if (existing?.logoUrl) {
-    await deleteUploadedFile(existing.logoUrl)
+  const existing = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { [field]: true } })
+  const previousPath = existing?.[field]
+  if (previousPath) {
+    await deleteUploadedFile(previousPath)
   }
 
   const settings = await prisma.companySettings.upsert({
     where: { id: 1 },
-    update: { logoUrl: relativePath },
-    create: { id: 1, logoUrl: relativePath },
+    update: { [field]: relativePath },
+    create: { id: 1, [field]: relativePath },
   })
 
-  await recordAuditLog({ userId: viewer.sub, action: "SETTINGS_LOGO_UPDATED", entityType: "CompanySettings", entityId: "1", ...meta })
+  await recordAuditLog({ userId: viewer.sub, action: auditAction, entityType: "CompanySettings", entityId: "1", ...meta })
   return settings
+}
+
+export async function uploadCompanyLogo(file: File, viewer: AccessTokenPayload, meta: Meta) {
+  return uploadCompanyImage("logoUrl", "company/logo", "SETTINGS_LOGO_UPDATED", file, viewer, meta)
+}
+
+export async function uploadLetterheadImage(file: File, viewer: AccessTokenPayload, meta: Meta) {
+  return uploadCompanyImage("letterheadImageUrl", "company/letterhead", "SETTINGS_LETTERHEAD_UPDATED", file, viewer, meta)
+}
+
+export async function uploadSignatureImage(file: File, viewer: AccessTokenPayload, meta: Meta) {
+  return uploadCompanyImage("signatureImageUrl", "company/signature", "SETTINGS_SIGNATURE_UPDATED", file, viewer, meta)
 }
 
 export async function updateWorkingHoursSettings(input: WorkingHoursSettingsInput, viewer: AccessTokenPayload, meta: Meta) {

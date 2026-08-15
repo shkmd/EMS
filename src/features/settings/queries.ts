@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma"
 const DEFAULT_COMPANY_SETTINGS = {
   companyName: "My Company",
   logoUrl: null,
+  letterheadImageUrl: null,
+  signatureImageUrl: null,
   primaryColor: null,
   fontFamily: null,
   address: null,

@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Loader2, Upload } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { apiFetch } from "@/lib/api-client"
+import { ImageUploadField } from "@/features/settings/components/image-upload-field"
 import {
   companySettingsSchema,
   FONT_FAMILY_VALUES,
@@ -25,9 +26,9 @@ export function CompanySettingsForm() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasLogo, setHasLogo] = useState(false)
-  const [logoVersion, setLogoVersion] = useState(0)
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [hasLetterhead, setHasLetterhead] = useState(false)
+  const [hasSignature, setHasSignature] = useState(false)
+  const [imageVersion, setImageVersion] = useState(0)
 
   const form = useForm<CompanySettingsInput>({
     resolver: zodResolver(companySettingsSchema),
@@ -46,7 +47,13 @@ export function CompanySettingsForm() {
   })
 
   useEffect(() => {
-    apiFetch<{ settings: CompanySettingsInput & { logoUrl: string | null } }>("/api/settings/company").then((result) => {
+    apiFetch<{
+      settings: CompanySettingsInput & {
+        logoUrl: string | null
+        letterheadImageUrl: string | null
+        signatureImageUrl: string | null
+      }
+    }>("/api/settings/company").then((result) => {
       if (result.success) {
         form.reset({
           companyName: result.data.settings.companyName,
@@ -61,6 +68,8 @@ export function CompanySettingsForm() {
           fontFamily: result.data.settings.fontFamily ?? "inter",
         })
         setHasLogo(!!result.data.settings.logoUrl)
+        setHasLetterhead(!!result.data.settings.letterheadImageUrl)
+        setHasSignature(!!result.data.settings.signatureImageUrl)
       }
       setIsLoading(false)
     })
@@ -81,29 +90,6 @@ export function CompanySettingsForm() {
     }
   }
 
-  async function onLogoSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsUploadingLogo(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/settings/logo", { method: "POST", body: formData, credentials: "include" })
-      const result = await res.json()
-      if (!result.success) {
-        toast.error(result.error.message)
-        return
-      }
-      toast.success("Logo updated. Refresh to see it everywhere.")
-      setHasLogo(true)
-      setLogoVersion((v) => v + 1)
-    } finally {
-      setIsUploadingLogo(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
-  }
-
   if (isLoading) {
     return <Skeleton className="h-96 w-full" />
   }
@@ -117,35 +103,40 @@ export function CompanySettingsForm() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-                {hasLogo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={`/api/settings/logo?v=${logoVersion}`} alt="Company logo" className="size-full object-contain" />
-                ) : (
-                  <span className="text-xs text-muted-foreground">No logo</span>
-                )}
-              </div>
-              <div className="flex flex-col gap-1">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={onLogoSelected}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isUploadingLogo}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {isUploadingLogo ? <Loader2 className="animate-spin" /> : <Upload />}
-                  Upload logo
-                </Button>
-                <p className="text-xs text-muted-foreground">JPEG, PNG or WebP.</p>
-              </div>
+            <div className="flex flex-col gap-4 rounded-lg border p-4">
+              <ImageUploadField
+                label="Logo"
+                helpText="JPEG, PNG or WebP. Shown on the login page, sidebar, and generated documents."
+                uploadUrl="/api/settings/logo"
+                previewUrl={`/api/settings/logo?v=${imageVersion}`}
+                hasImage={hasLogo}
+                onUploaded={() => {
+                  setHasLogo(true)
+                  setImageVersion((v) => v + 1)
+                }}
+              />
+              <ImageUploadField
+                label="Letterhead"
+                helpText="A full letterhead banner (logo/borders/footer as one image) — used instead of the logo+name header on generated documents, if set."
+                uploadUrl="/api/settings/letterhead"
+                previewUrl={`/api/settings/letterhead?v=${imageVersion}`}
+                hasImage={hasLetterhead}
+                onUploaded={() => {
+                  setHasLetterhead(true)
+                  setImageVersion((v) => v + 1)
+                }}
+              />
+              <ImageUploadField
+                label="Signature"
+                helpText="An authorized signature or stamp, shown near “Authorized Signatory” on generated documents."
+                uploadUrl="/api/settings/signature"
+                previewUrl={`/api/settings/signature?v=${imageVersion}`}
+                hasImage={hasSignature}
+                onUploaded={() => {
+                  setHasSignature(true)
+                  setImageVersion((v) => v + 1)
+                }}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <FormField

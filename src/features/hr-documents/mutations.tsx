@@ -6,14 +6,14 @@ import { format } from "date-fns"
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
-import { saveUploadedFile } from "@/lib/storage"
+import { saveUploadedFile, deleteUploadedFile, assertAllowedFile, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageEmployees } from "@/features/employees/authorization"
 import { getCompanySettings } from "@/features/settings/queries"
-import { getCompanyLetterheadInfo } from "@/features/hr-documents/pdf/shared"
+import { getCompanyLetterheadInfo, toDataUri } from "@/features/hr-documents/pdf/shared"
 import { GenericDocument } from "@/features/hr-documents/pdf/generic-document"
 import { getEffectiveTemplate } from "@/features/hr-documents/queries"
-import { renderTemplateText, type TemplateType } from "@/features/hr-documents/templates"
+import { renderTemplateText, DEFAULT_TEMPLATES, IMAGE_PLACEHOLDER_DATA, type TemplateType } from "@/features/hr-documents/templates"
 import type { GenerateEmployeeDocumentInput, OfferLetterInput, UpdateDocumentTemplateInput } from "@/features/hr-documents/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
@@ -61,6 +61,7 @@ export async function generateEmployeeDocument(
     dateOfJoining: format(employee.dateOfJoining, "dd MMMM yyyy"),
     companyName: company.companyName,
     currentDate: format(new Date(), "dd MMMM yyyy"),
+    ...IMAGE_PLACEHOLDER_DATA,
   }
 
   let data: Record<string, string>
@@ -95,7 +96,10 @@ export async function generateEmployeeDocument(
 
   const title = renderTemplateText(template.title, data)
   const bodyText = renderTemplateText(template.bodyText, data)
-  const buffer = await renderToBuffer(<GenericDocument title={title} bodyText={bodyText} company={company} />)
+  const imageDataUri = await toDataUri(template.imageUrl, "template image")
+  const buffer = await renderToBuffer(
+    <GenericDocument title={title} bodyText={bodyText} company={company} imageDataUri={imageDataUri} />
+  )
 
   const fileName = `${FILE_NAME_PREFIX[input.type]}-${employee.employeeCode}.pdf`
   const { relativePath } = await saveUploadedFile(buffer, `employees/${employeeId}/documents`, fileName)
@@ -145,11 +149,15 @@ export async function generateOfferLetter(input: OfferLetterInput, viewer: Acces
     validUntilClause: input.validUntil ? ` This offer is valid until ${format(new Date(input.validUntil), "dd MMMM yyyy")}.` : "",
     companyName: company.companyName,
     currentDate: format(new Date(), "dd MMMM yyyy"),
+    ...IMAGE_PLACEHOLDER_DATA,
   }
 
   const title = renderTemplateText(template.title, data)
   const bodyText = renderTemplateText(template.bodyText, data)
-  const buffer = await renderToBuffer(<GenericDocument title={title} bodyText={bodyText} company={company} />)
+  const imageDataUri = await toDataUri(template.imageUrl, "template image")
+  const buffer = await renderToBuffer(
+    <GenericDocument title={title} bodyText={bodyText} company={company} imageDataUri={imageDataUri} />
+  )
   const fileName = `offer-letter-${input.candidateName.replace(/\s+/g, "-").toLowerCase()}.pdf`
 
   await recordAuditLog({
@@ -192,12 +200,64 @@ export async function updateDocumentTemplate(
 export async function resetDocumentTemplate(type: TemplateType, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManage(viewer)
 
+  const existing = await prisma.documentTemplate.findUnique({ where: { type } })
+  if (existing?.imageUrl) await deleteUploadedFile(existing.imageUrl)
+
   await prisma.documentTemplate.deleteMany({ where: { type } })
 
   await recordAuditLog({
     userId: viewer.sub,
     action: "DOCUMENT_TEMPLATE_RESET",
     entityType: "DocumentTemplate",
+    metadata: { type },
+    ...meta,
+  })
+}
+
+export async function uploadTemplateImage(type: TemplateType, file: File, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  assertAllowedFile(file, ALLOWED_PHOTO_MIME_TYPES)
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { relativePath } = await saveUploadedFile(buffer, `document-templates/${type}`, file.name)
+
+  const existing = await prisma.documentTemplate.findUnique({ where: { type } })
+  if (existing?.imageUrl) await deleteUploadedFile(existing.imageUrl)
+
+  const textFields = existing ? { title: existing.title, bodyText: existing.bodyText } : DEFAULT_TEMPLATES[type]
+
+  const template = await prisma.documentTemplate.upsert({
+    where: { type },
+    update: { imageUrl: relativePath, updatedById: viewer.sub },
+    create: { type, imageUrl: relativePath, updatedById: viewer.sub, ...textFields },
+  })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "DOCUMENT_TEMPLATE_IMAGE_UPDATED",
+    entityType: "DocumentTemplate",
+    entityId: template.id,
+    metadata: { type },
+    ...meta,
+  })
+
+  return template
+}
+
+export async function deleteTemplateImage(type: TemplateType, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  const existing = await prisma.documentTemplate.findUnique({ where: { type } })
+  if (!existing?.imageUrl) return
+
+  await deleteUploadedFile(existing.imageUrl)
+  await prisma.documentTemplate.update({ where: { type }, data: { imageUrl: null } })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "DOCUMENT_TEMPLATE_IMAGE_REMOVED",
+    entityType: "DocumentTemplate",
+    entityId: existing.id,
     metadata: { type },
     ...meta,
   })

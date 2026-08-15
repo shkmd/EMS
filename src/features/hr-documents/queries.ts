@@ -8,8 +8,8 @@ import { templateTypeValues, TEMPLATE_LABELS, DEFAULT_TEMPLATES, type TemplateTy
  * currently active) and by document generation. */
 export async function getEffectiveTemplate(type: TemplateType) {
   const custom = await prisma.documentTemplate.findUnique({ where: { type } })
-  if (custom) return { title: custom.title, bodyText: custom.bodyText, isCustomized: true }
-  return { ...DEFAULT_TEMPLATES[type], isCustomized: false }
+  if (custom) return { title: custom.title, bodyText: custom.bodyText, imageUrl: custom.imageUrl, isCustomized: true }
+  return { ...DEFAULT_TEMPLATES[type], imageUrl: null, isCustomized: false }
 }
 
 export async function listDocumentTemplates() {
@@ -25,6 +25,7 @@ export async function listDocumentTemplates() {
       label: TEMPLATE_LABELS[type],
       title: custom?.title ?? DEFAULT_TEMPLATES[type].title,
       bodyText: custom?.bodyText ?? DEFAULT_TEMPLATES[type].bodyText,
+      hasImage: !!custom?.imageUrl,
       isCustomized: !!custom,
       updatedAt: custom?.updatedAt ?? null,
       updatedByEmail: custom?.updatedBy?.email ?? null,

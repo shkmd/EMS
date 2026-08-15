@@ -1,6 +1,13 @@
 export const templateTypeValues = ["RELIEVING_LETTER", "EXPERIENCE_CERTIFICATE", "SALARY_CERTIFICATE", "OFFER_LETTER"] as const
 export type TemplateType = (typeof templateTypeValues)[number]
 
+// The token a template body uses (on its own line) to place the template's
+// uploaded image. Must survive renderTemplateText's substitution pass as
+// a literal string — see IMAGE_PLACEHOLDER_DATA below — so the PDF
+// renderer can still detect and swap it for the actual <Image>.
+export const IMAGE_PLACEHOLDER_TOKEN = "{{templateImage}}"
+export const IMAGE_PLACEHOLDER_DATA = { templateImage: IMAGE_PLACEHOLDER_TOKEN }
+
 export const TEMPLATE_LABELS: Record<TemplateType, string> = {
   RELIEVING_LETTER: "Relieving Letter",
   EXPERIENCE_CERTIFICATE: "Experience Certificate",

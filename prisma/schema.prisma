@@ -497,6 +497,9 @@ model DocumentTemplate {
   type        DocumentType @unique
   title       String
   bodyText    String       @db.Text
+  // Optional image inserted wherever the body text contains the literal
+  // {{templateImage}} token, on its own line — e.g. a seal graphic.
+  imageUrl    String?
   updatedById String?
   updatedAt   DateTime     @updatedAt
   createdAt   DateTime     @default(now())
@@ -1212,19 +1215,28 @@ model TaskActivity {
 // ============================================================================
 
 model CompanySettings {
-  id           Int      @id @default(1)
-  companyName  String   @default("My Company")
-  logoUrl      String?
-  primaryColor String?
-  fontFamily   String?
-  address      String?  @db.Text
-  phone        String?
-  email        String?
-  website      String?
-  timezone     String   @default("UTC")
-  currency     String   @default("USD")
-  dateFormat   String   @default("dd MMM yyyy")
-  updatedAt    DateTime @updatedAt
+  id                 Int      @id @default(1)
+  companyName        String   @default("My Company")
+  logoUrl            String?
+  // Full letterhead banner (logo + borders + footer already baked into one
+  // image) — when set, generated documents use this instead of the
+  // auto-built logo+name+address header. Served only to authenticated
+  // users, unlike logoUrl which is public (shown on the login page).
+  letterheadImageUrl String?
+  // Signature/stamp image shown near "Authorized Signatory" on generated
+  // documents. Also auth-gated — a public URL for this would let anyone
+  // lift it and paste it onto a forged document.
+  signatureImageUrl  String?
+  primaryColor       String?
+  fontFamily         String?
+  address            String?  @db.Text
+  phone              String?
+  email              String?
+  website            String?
+  timezone           String   @default("UTC")
+  currency           String   @default("USD")
+  dateFormat         String   @default("dd MMM yyyy")
+  updatedAt          DateTime @updatedAt
 
   @@map("company_settings")
 }
