@@ -260,6 +260,7 @@ model User {
   pushSubscriptions          PushSubscription[]
   employeeNotes              EmployeeNote[]
   offboardingsInitiated      Offboarding[]
+  documentTemplatesUpdated   DocumentTemplate[]
   announcements              Announcement[]
   reviewsGiven               PerformanceReview[]       @relation("ReviewerUser")
   conversationsCreated       Conversation[]            @relation("ConversationCreatedBy")
@@ -484,6 +485,25 @@ model EmployeeDocument {
 
   @@index([employeeId])
   @@map("employee_documents")
+}
+
+// Editable wording for an auto-generated document type (relieving letter,
+// experience/salary certificate, offer letter). One row per type — no row
+// means the built-in default text (DEFAULT_TEMPLATES in
+// features/hr-documents/templates.ts) is used. `bodyText` holds
+// {{placeholder}} tokens substituted at generation time.
+model DocumentTemplate {
+  id          String       @id @default(cuid())
+  type        DocumentType @unique
+  title       String
+  bodyText    String       @db.Text
+  updatedById String?
+  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime     @default(now())
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("document_templates")
 }
 
 model EmployeeNote {

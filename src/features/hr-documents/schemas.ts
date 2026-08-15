@@ -16,3 +16,9 @@ export const offerLetterSchema = z.object({
   validUntil: z.string().optional(),
 })
 export type OfferLetterInput = z.infer<typeof offerLetterSchema>
+
+export const updateDocumentTemplateSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  bodyText: z.string().min(1, "Body text is required").max(5000),
+})
+export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateSchema>

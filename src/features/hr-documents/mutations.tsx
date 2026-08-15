@@ -1,6 +1,7 @@
 import "server-only"
 
 import { renderToBuffer } from "@react-pdf/renderer"
+import { format } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
@@ -10,11 +11,10 @@ import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageEmployees } from "@/features/employees/authorization"
 import { getCompanySettings } from "@/features/settings/queries"
 import { getCompanyLetterheadInfo } from "@/features/hr-documents/pdf/shared"
-import { RelievingLetterDocument, type RelievingLetterData } from "@/features/hr-documents/pdf/relieving-letter"
-import { ExperienceCertificateDocument, type ExperienceCertificateData } from "@/features/hr-documents/pdf/experience-certificate"
-import { SalaryCertificateDocument, type SalaryCertificateData } from "@/features/hr-documents/pdf/salary-certificate"
-import { OfferLetterDocument, type OfferLetterData } from "@/features/hr-documents/pdf/offer-letter"
-import type { GenerateEmployeeDocumentInput, OfferLetterInput } from "@/features/hr-documents/schemas"
+import { GenericDocument } from "@/features/hr-documents/pdf/generic-document"
+import { getEffectiveTemplate } from "@/features/hr-documents/queries"
+import { renderTemplateText, type TemplateType } from "@/features/hr-documents/templates"
+import type { GenerateEmployeeDocumentInput, OfferLetterInput, UpdateDocumentTemplateInput } from "@/features/hr-documents/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
@@ -24,13 +24,21 @@ const FILE_NAME_PREFIX: Record<string, string> = {
   SALARY_CERTIFICATE: "salary-certificate",
 }
 
+function formatMoney(n: number, currency: string) {
+  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function assertCanManage(viewer: AccessTokenPayload) {
+  if (!canManageEmployees(viewer.role)) throw new ForbiddenError()
+}
+
 export async function generateEmployeeDocument(
   employeeId: string,
   input: GenerateEmployeeDocumentInput,
   viewer: AccessTokenPayload,
   meta: Meta
 ) {
-  if (!canManageEmployees(viewer.role)) throw new ForbiddenError()
+  assertCanManage(viewer)
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId, deletedAt: null },
@@ -38,9 +46,24 @@ export async function generateEmployeeDocument(
   })
   if (!employee) throw new NotFoundError("Employee not found")
 
-  const [company, companySettings] = await Promise.all([getCompanyLetterheadInfo(), getCompanySettings()])
+  const [company, companySettings, template] = await Promise.all([
+    getCompanyLetterheadInfo(),
+    getCompanySettings(),
+    getEffectiveTemplate(input.type),
+  ])
 
-  let buffer: Buffer
+  const common = {
+    employeeName: `${employee.firstName} ${employee.lastName}`,
+    employeeFirstName: employee.firstName,
+    employeeCode: employee.employeeCode,
+    designation: employee.designation?.title ?? "an employee",
+    departmentClause: employee.department ? ` in the ${employee.department.name} department` : "",
+    dateOfJoining: format(employee.dateOfJoining, "dd MMMM yyyy"),
+    companyName: company.companyName,
+    currentDate: format(new Date(), "dd MMMM yyyy"),
+  }
+
+  let data: Record<string, string>
 
   if (input.type === "RELIEVING_LETTER") {
     const offboarding = await prisma.offboarding.findFirst({ where: { employeeId }, orderBy: { createdAt: "desc" } })
@@ -49,47 +72,30 @@ export async function generateEmployeeDocument(
         "This employee has no offboarding record — initiate offboarding first to generate a relieving letter"
       )
     }
-    const data: RelievingLetterData = {
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      employeeCode: employee.employeeCode,
-      designationTitle: employee.designation?.title ?? null,
-      departmentName: employee.department?.name ?? null,
-      dateOfJoining: employee.dateOfJoining,
-      lastWorkingDay: offboarding.lastWorkingDay,
-    }
-    buffer = await renderToBuffer(<RelievingLetterDocument data={data} company={company} />)
+    data = { ...common, lastWorkingDay: format(offboarding.lastWorkingDay, "dd MMMM yyyy") }
   } else if (input.type === "EXPERIENCE_CERTIFICATE") {
     const offboarding = await prisma.offboarding.findFirst({
       where: { employeeId, status: "COMPLETED" },
       orderBy: { createdAt: "desc" },
     })
-    const data: ExperienceCertificateData = {
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      employeeCode: employee.employeeCode,
-      designationTitle: employee.designation?.title ?? null,
-      departmentName: employee.department?.name ?? null,
-      dateOfJoining: employee.dateOfJoining,
-      lastWorkingDay: offboarding?.lastWorkingDay ?? null,
-    }
-    buffer = await renderToBuffer(<ExperienceCertificateDocument data={data} company={company} />)
+    const tenureClause = offboarding
+      ? `from ${common.dateOfJoining} to ${format(offboarding.lastWorkingDay, "dd MMMM yyyy")}`
+      : `since ${common.dateOfJoining}`
+    data = { ...common, tenureClause }
   } else {
     const basic = employee.basicSalary ? Number(employee.basicSalary) : null
     const allowances = employee.allowances ? Number(employee.allowances) : 0
-    const data: SalaryCertificateData = {
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      employeeCode: employee.employeeCode,
-      designationTitle: employee.designation?.title ?? null,
-      departmentName: employee.department?.name ?? null,
-      dateOfJoining: employee.dateOfJoining,
-      basicSalary: basic,
-      grossSalary: basic != null ? basic + allowances : null,
-      currency: companySettings.currency,
+    const gross = basic != null ? basic + allowances : null
+    data = {
+      ...common,
+      basicSalary: basic != null ? formatMoney(basic, companySettings.currency) : "—",
+      grossSalary: gross != null ? formatMoney(gross, companySettings.currency) : "—",
     }
-    buffer = await renderToBuffer(<SalaryCertificateDocument data={data} company={company} />)
   }
+
+  const title = renderTemplateText(template.title, data)
+  const bodyText = renderTemplateText(template.bodyText, data)
+  const buffer = await renderToBuffer(<GenericDocument title={title} bodyText={bodyText} company={company} />)
 
   const fileName = `${FILE_NAME_PREFIX[input.type]}-${employee.employeeCode}.pdf`
   const { relativePath } = await saveUploadedFile(buffer, `employees/${employeeId}/documents`, fileName)
@@ -118,25 +124,32 @@ export async function generateEmployeeDocument(
 }
 
 export async function generateOfferLetter(input: OfferLetterInput, viewer: AccessTokenPayload, meta: Meta) {
-  if (!canManageEmployees(viewer.role)) throw new ForbiddenError()
+  assertCanManage(viewer)
 
-  const [company, companySettings] = await Promise.all([getCompanyLetterheadInfo(), getCompanySettings()])
+  const [company, companySettings, template] = await Promise.all([
+    getCompanyLetterheadInfo(),
+    getCompanySettings(),
+    getEffectiveTemplate("OFFER_LETTER"),
+  ])
 
   const department = input.departmentId
     ? await prisma.department.findUnique({ where: { id: input.departmentId } })
     : null
 
-  const data: OfferLetterData = {
+  const data: Record<string, string> = {
     candidateName: input.candidateName,
     position: input.position,
-    departmentName: department?.name ?? null,
-    proposedSalary: Number(input.proposedSalary),
-    currency: companySettings.currency,
-    joiningDate: new Date(input.joiningDate),
-    validUntil: input.validUntil ? new Date(input.validUntil) : null,
+    departmentClause: department ? ` in the ${department.name} department` : "",
+    proposedSalary: formatMoney(Number(input.proposedSalary), companySettings.currency),
+    joiningDate: format(new Date(input.joiningDate), "dd MMMM yyyy"),
+    validUntilClause: input.validUntil ? ` This offer is valid until ${format(new Date(input.validUntil), "dd MMMM yyyy")}.` : "",
+    companyName: company.companyName,
+    currentDate: format(new Date(), "dd MMMM yyyy"),
   }
 
-  const buffer = await renderToBuffer(<OfferLetterDocument data={data} company={company} />)
+  const title = renderTemplateText(template.title, data)
+  const bodyText = renderTemplateText(template.bodyText, data)
+  const buffer = await renderToBuffer(<GenericDocument title={title} bodyText={bodyText} company={company} />)
   const fileName = `offer-letter-${input.candidateName.replace(/\s+/g, "-").toLowerCase()}.pdf`
 
   await recordAuditLog({
@@ -148,4 +161,44 @@ export async function generateOfferLetter(input: OfferLetterInput, viewer: Acces
   })
 
   return { buffer, fileName }
+}
+
+export async function updateDocumentTemplate(
+  type: TemplateType,
+  input: UpdateDocumentTemplateInput,
+  viewer: AccessTokenPayload,
+  meta: Meta
+) {
+  assertCanManage(viewer)
+
+  const template = await prisma.documentTemplate.upsert({
+    where: { type },
+    update: { title: input.title, bodyText: input.bodyText, updatedById: viewer.sub },
+    create: { type, title: input.title, bodyText: input.bodyText, updatedById: viewer.sub },
+  })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "DOCUMENT_TEMPLATE_UPDATED",
+    entityType: "DocumentTemplate",
+    entityId: template.id,
+    metadata: { type },
+    ...meta,
+  })
+
+  return template
+}
+
+export async function resetDocumentTemplate(type: TemplateType, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  await prisma.documentTemplate.deleteMany({ where: { type } })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "DOCUMENT_TEMPLATE_RESET",
+    entityType: "DocumentTemplate",
+    metadata: { type },
+    ...meta,
+  })
 }

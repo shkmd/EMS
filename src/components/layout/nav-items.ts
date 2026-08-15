@@ -88,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { label: "Settings", href: "/settings", icon: Settings, roles: ["SUPER_ADMIN"] },
+      { label: "Settings", href: "/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Audit Logs", href: "/audit-logs", icon: History, roles: ["SUPER_ADMIN"] },
     ],
   },
