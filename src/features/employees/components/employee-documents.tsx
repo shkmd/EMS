@@ -3,7 +3,7 @@
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Download, FileText, Loader2, Trash2, Upload } from "lucide-react"
+import { Download, FileText, Loader2, Sparkles, Trash2, Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { documentTypeValues } from "@/features/employees/schemas"
+import { employeeDocumentGenerateTypeValues } from "@/features/hr-documents/schemas"
 
 export type EmployeeDocumentItem = {
   id: string
@@ -35,7 +36,15 @@ const TYPE_LABELS: Record<string, string> = {
   ADDRESS_PROOF: "Address Proof",
   EDUCATIONAL_CERTIFICATE: "Educational Certificate",
   EXPERIENCE_CERTIFICATE: "Experience Certificate",
+  RELIEVING_LETTER: "Relieving Letter",
+  SALARY_CERTIFICATE: "Salary Certificate",
   OTHER: "Other",
+}
+
+const GENERATE_LABELS: Record<string, string> = {
+  RELIEVING_LETTER: "Relieving Letter",
+  EXPERIENCE_CERTIFICATE: "Experience Certificate",
+  SALARY_CERTIFICATE: "Salary Certificate",
 }
 
 function formatSize(bytes: number) {
@@ -59,6 +68,8 @@ export function EmployeeDocuments({
   const [isUploading, setIsUploading] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<EmployeeDocumentItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [generateType, setGenerateType] = useState<string>("SALARY_CERTIFICATE")
+  const [isGenerating, setIsGenerating] = useState(false)
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -88,6 +99,38 @@ export function EmployeeDocuments({
       toast.error("Upload failed. Please try again.")
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  async function handleGenerate() {
+    setIsGenerating(true)
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/documents/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ type: generateType }),
+      })
+      if (!res.ok) {
+        const result = await res.json().catch(() => null)
+        toast.error(result?.error?.message ?? "Failed to generate document")
+        return
+      }
+      const blob = await res.blob()
+      const disposition = res.headers.get("Content-Disposition") ?? ""
+      const fileName = /filename="(.+)"/.exec(disposition)?.[1] ?? "document.pdf"
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Document generated and saved")
+      router.refresh()
+    } catch {
+      toast.error("Something went wrong. Please try again.")
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -140,6 +183,28 @@ export function EmployeeDocuments({
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
             {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
             Upload document
+          </Button>
+        </div>
+      )}
+
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+          <span className="text-xs text-muted-foreground">Generate:</span>
+          <Select value={generateType} onValueChange={setGenerateType}>
+            <SelectTrigger className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {employeeDocumentGenerateTypeValues.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {GENERATE_LABELS[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={handleGenerate} disabled={isGenerating}>
+            {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            Generate PDF
           </Button>
         </div>
       )}

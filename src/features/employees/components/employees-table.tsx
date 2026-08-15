@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { getEmployeeColumns, type EmployeeRow } from "@/features/employees/components/employee-columns"
 import { DeleteEmployeeDialog } from "@/features/employees/components/delete-employee-dialog"
+import { GenerateOfferLetterDialog } from "@/features/hr-documents/components/generate-offer-letter-dialog"
 import type { PaginationMeta } from "@/types/api"
 
 const ALL = "__all__"
@@ -178,6 +179,7 @@ export function EmployeesTable({ items, pagination, departments, canManage, quer
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {canManage && <GenerateOfferLetterDialog departments={departments} />}
           {canManage && (
             <Button asChild>
               <Link href="/employees/new">
