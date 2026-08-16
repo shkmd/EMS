@@ -66,6 +66,12 @@ enum OffboardingStatus {
   CANCELLED
 }
 
+enum OnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 enum ExitReason {
   RESIGNATION
   TERMINATION
@@ -260,6 +266,7 @@ model User {
   pushSubscriptions          PushSubscription[]
   employeeNotes              EmployeeNote[]
   offboardingsInitiated      Offboarding[]
+  onboardingsInitiated       Onboarding[]
   documentTemplatesUpdated   DocumentTemplate[]
   announcements              Announcement[]
   reviewsGiven               PerformanceReview[]       @relation("ReviewerUser")
@@ -444,6 +451,7 @@ model Employee {
   notes                  EmployeeNote[]
   timelineEvents         EmployeeTimelineEvent[]
   offboardings           Offboarding[]
+  onboardings            Onboarding[]
   attendances            Attendance[]
   screenActivities       ScreenActivity[]
   dailyLogs              DailyLog[]
@@ -569,6 +577,36 @@ model Offboarding {
   @@index([employeeId])
   @@index([status])
   @@map("offboardings")
+}
+
+// Tracks a new hire's onboarding checklist. Unlike Offboarding, "assets
+// issued" and "portal access granted" are shown live from AssetAssignment /
+// Employee.user rather than stored here — only the two manual steps
+// (documents collected, orientation complete) are persisted, and only
+// those two gate completion, since not every hire needs assets or system
+// access.
+model Onboarding {
+  id         String           @id @default(cuid())
+  employeeId String
+  status     OnboardingStatus @default(IN_PROGRESS)
+
+  documentsCollected  Boolean @default(false)
+  documentsNotes      String? @db.Text
+  orientationComplete Boolean @default(false)
+  orientationNotes    String? @db.Text
+
+  initiatedById String
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  initiatedBy User     @relation(fields: [initiatedById], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("onboardings")
 }
 
 // ============================================================================

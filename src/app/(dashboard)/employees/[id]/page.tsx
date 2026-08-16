@@ -16,6 +16,7 @@ import { EmployeeNotes } from "@/features/employees/components/employee-notes";
 import { EmployeeDocuments } from "@/features/employees/components/employee-documents";
 import { EmployeeTimeline } from "@/features/employees/components/employee-timeline";
 import { OffboardingTab } from "@/features/offboarding/components/offboarding-tab";
+import { OnboardingTab } from "@/features/onboarding/components/onboarding-tab";
 import { EmployeePhotoUpload } from "@/features/employees/components/employee-photo-upload";
 import { PrintProfileButton } from "@/features/employees/components/print-profile-button";
 import { AccountAccessCard } from "@/features/employees/components/account-access-card";
@@ -32,7 +33,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   TERMINATED: "destructive",
 };
 
-const VALID_TABS = ["overview", "documents", "notes", "timeline", "offboarding"];
+const VALID_TABS = ["overview", "documents", "notes", "timeline", "onboarding", "offboarding"];
 
 export default async function EmployeeDetailPage({
   params,
@@ -119,6 +120,7 @@ export default async function EmployeeDetailPage({
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          {canManage && <TabsTrigger value="onboarding">Onboarding</TabsTrigger>}
           {canManage && <TabsTrigger value="offboarding">Offboarding</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview" className="mt-3">
@@ -145,6 +147,11 @@ export default async function EmployeeDetailPage({
             </CardContent>
           </Card>
         </TabsContent>
+        {canManage && (
+          <TabsContent value="onboarding" className="mt-3">
+            <OnboardingTab employeeId={employee.id} hasPortalAccess={!!employee.user?.isActive} />
+          </TabsContent>
+        )}
         {canManage && (
           <TabsContent value="offboarding" className="mt-3">
             <OffboardingTab employeeId={employee.id} employeeStatus={employee.status} />

@@ -18,6 +18,7 @@ import {
   MessageSquare,
   FolderKanban,
   BellRing,
+  LogIn,
   LogOut,
 } from "lucide-react"
 
@@ -49,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Employees", href: "/employees", icon: Users, roles: ["SUPER_ADMIN", "HR", "MANAGER"] },
       { label: "Departments", href: "/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Designations", href: "/designations", icon: IdCard, roles: ["SUPER_ADMIN", "HR"] },
+      { label: "Onboarding", href: "/onboarding", icon: LogIn, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Offboarding", href: "/offboarding", icon: LogOut, roles: ["SUPER_ADMIN", "HR"] },
     ],
   },
