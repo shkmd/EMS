@@ -77,7 +77,7 @@ export async function listLeaveRequests(query: LeaveListQuery, viewer: AccessTok
   return prisma.leaveRequest.findMany({
     where,
     include: requestInclude,
-    orderBy: { createdAt: "desc" },
+    orderBy: query.scope === "all" ? { startDate: "desc" } : { createdAt: "desc" },
   })
 }
 
