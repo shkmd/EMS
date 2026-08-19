@@ -397,3 +397,34 @@ export async function cancelLeave(id: string, viewer: AccessTokenPayload, meta: 
     ...meta,
   })
 }
+
+/** HR-only permanent removal of a leave request — for erroneous or
+ * duplicate entries, distinct from cancelLeave (which just changes status
+ * and keeps the record). Reverses whatever balance impact an APPROVED+paid
+ * request had before deleting, same as cancelLeave/updateLeaveRequest. */
+export async function deleteLeaveRequest(id: string, viewer: AccessTokenPayload, meta: Meta) {
+  if (!canActAsHr(viewer.role)) throw new ForbiddenError()
+
+  const request = await prisma.leaveRequest.findUnique({ where: { id }, include: { leaveType: true } })
+  if (!request) throw new NotFoundError("Leave request not found")
+
+  await prisma.$transaction(async (tx) => {
+    if (request.status === "APPROVED" && request.leaveType.isPaid) {
+      const year = request.startDate.getUTCFullYear()
+      await tx.leaveBalance.updateMany({
+        where: { employeeId: request.employeeId, leaveTypeId: request.leaveTypeId, year },
+        data: { used: { decrement: request.days } },
+      })
+    }
+    await tx.leaveRequest.delete({ where: { id } })
+  })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "LEAVE_REQUEST_DELETED",
+    entityType: "LeaveRequest",
+    entityId: id,
+    metadata: { employeeId: request.employeeId, status: request.status },
+    ...meta,
+  })
+}

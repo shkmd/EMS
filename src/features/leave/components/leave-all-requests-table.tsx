@@ -2,12 +2,23 @@
 
 import { useEffect, useState } from "react"
 import { format, isSameDay } from "date-fns"
-import { Eye, Pencil } from "lucide-react"
+import { Eye, Pencil, Trash2 } from "lucide-react"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { apiFetch } from "@/lib/api-client"
@@ -16,6 +27,8 @@ import { EditLeaveRequestDialog } from "@/features/leave/components/edit-leave-r
 import { RecordPastLeaveDialog } from "@/features/leave/components/record-past-leave-dialog"
 import { LeaveRequestDetailDialog } from "@/features/leave/components/leave-request-detail-dialog"
 import type { LeaveRequestUpdateInput } from "@/features/leave/schemas"
+
+type EmployeeOption = { id: string; name: string; profilePhotoUrl: string | null }
 
 type RequestRow = {
   id: string
@@ -50,15 +63,34 @@ export function LeaveAllRequestsTable({
   const [requests, setRequests] = useState<RequestRow[] | null>(null)
   const [editing, setEditing] = useState<RequestRow | null>(null)
   const [viewing, setViewing] = useState<RequestRow | null>(null)
+  const [deleting, setDeleting] = useState<RequestRow | null>(null)
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [employeeId, setEmployeeId] = useState<string>("all")
 
-  async function load() {
-    const result = await apiFetch<{ requests: RequestRow[] }>("/api/leave?scope=all")
+  async function load(employeeFilter: string) {
+    const query = employeeFilter === "all" ? "" : `&employeeId=${employeeFilter}`
+    const result = await apiFetch<{ requests: RequestRow[] }>(`/api/leave?scope=all${query}`)
     if (result.success) setRequests(result.data.requests)
   }
 
   useEffect(() => {
-    load()
+    load(employeeId)
+  }, [employeeId])
+
+  useEffect(() => {
+    apiFetch<{ employees: EmployeeOption[] }>("/api/projects/employees").then((result) => {
+      if (result.success) setEmployees(result.data.employees)
+    })
   }, [])
+
+  async function handleDelete() {
+    if (!deleting) return
+    const result = await apiFetch(`/api/leave/${deleting.id}`, { method: "DELETE" })
+    if (result.success) {
+      setDeleting(null)
+      load(employeeId)
+    }
+  }
 
   const editingDefaults: LeaveRequestUpdateInput | undefined = editing
     ? {
@@ -74,11 +106,22 @@ export function LeaveAllRequestsTable({
   return (
     <Card>
       <CardContent className="pt-6">
-        {canEdit && (
-          <div className="mb-4 flex justify-end">
-            <RecordPastLeaveDialog leaveTypes={leaveTypes} onSaved={load} />
-          </div>
-        )}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <Select value={employeeId} onValueChange={setEmployeeId}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Filter by employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All employees</SelectItem>
+              {employees.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {canEdit && <RecordPastLeaveDialog leaveTypes={leaveTypes} onSaved={() => load(employeeId)} />}
+        </div>
         {!requests ? (
           <Skeleton className="h-48 w-full" />
         ) : (
@@ -139,6 +182,17 @@ export function LeaveAllRequestsTable({
                               <Pencil className="size-3.5" />
                             </Button>
                           )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive hover:text-destructive"
+                              title="Delete this request"
+                              onClick={() => setDeleting(r)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -169,10 +223,35 @@ export function LeaveAllRequestsTable({
           }}
           onSaved={() => {
             setEditing(null)
-            load()
+            load(employeeId)
           }}
         />
       )}
+
+      <AlertDialog open={!!deleting} onOpenChange={(next) => !next && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this leave request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting && (
+                <>
+                  This will permanently remove {deleting.employee.firstName} {deleting.employee.lastName}&apos;s{" "}
+                  {deleting.leaveType.name} request for {format(new Date(deleting.startDate), "dd MMM yyyy")}
+                  {!isSameDay(new Date(deleting.startDate), new Date(deleting.endDate)) &&
+                    ` – ${format(new Date(deleting.endDate), "dd MMM yyyy")}`}
+                  . If it was approved and paid, the balance will be restored. This cannot be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
