@@ -123,8 +123,8 @@ export async function managerAction(id: string, input: LeaveActionInput, viewer:
 
   const managerEmployeeId = viewer.employeeId ?? null
 
-  const updated = await prisma.leaveRequest.update({
-    where: { id },
+  const claim = await prisma.leaveRequest.updateMany({
+    where: { id, status: "PENDING" },
     data: {
       status: input.action === "APPROVE" ? "MANAGER_APPROVED" : "REJECTED",
       managerId: managerEmployeeId,
@@ -132,6 +132,10 @@ export async function managerAction(id: string, input: LeaveActionInput, viewer:
       managerComment: input.comment || null,
     },
   })
+  if (claim.count === 0) {
+    throw new ValidationError("This request has already been actioned")
+  }
+  const updated = await prisma.leaveRequest.findUniqueOrThrow({ where: { id } })
 
   const employeeName = `${request.employee.firstName} ${request.employee.lastName}`
 
@@ -178,8 +182,8 @@ export async function hrAction(id: string, input: LeaveActionInput, viewer: Acce
   const approving = input.action === "APPROVE"
 
   const updated = await prisma.$transaction(async (tx) => {
-    const result = await tx.leaveRequest.update({
-      where: { id },
+    const claim = await tx.leaveRequest.updateMany({
+      where: { id, status: request.status },
       data: {
         status: approving ? "APPROVED" : "REJECTED",
         hrId: hrEmployeeId,
@@ -187,6 +191,10 @@ export async function hrAction(id: string, input: LeaveActionInput, viewer: Acce
         hrComment: input.comment || null,
       },
     })
+    if (claim.count === 0) {
+      throw new ValidationError("This request has already been actioned")
+    }
+    const result = await tx.leaveRequest.findUniqueOrThrow({ where: { id } })
 
     if (approving && request.leaveType.isPaid) {
       const year = request.startDate.getUTCFullYear()
@@ -251,6 +259,22 @@ export async function updateLeaveRequest(id: string, input: LeaveRequestUpdateIn
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const claim = await tx.leaveRequest.updateMany({
+      where: { id, updatedAt: existing.updatedAt },
+      data: {
+        leaveTypeId: newLeaveType.id,
+        startDate,
+        endDate,
+        duration: input.duration,
+        days,
+        reason: input.reason,
+        status: input.status,
+      },
+    })
+    if (claim.count === 0) {
+      throw new ValidationError("This request was just changed by someone else — please reload and try again")
+    }
+
     if (existing.status === "APPROVED" && existing.leaveType.isPaid) {
       const oldYear = existing.startDate.getUTCFullYear()
       await tx.leaveBalance.updateMany({
@@ -274,18 +298,7 @@ export async function updateLeaveRequest(id: string, input: LeaveRequestUpdateIn
       })
     }
 
-    return tx.leaveRequest.update({
-      where: { id },
-      data: {
-        leaveTypeId: newLeaveType.id,
-        startDate,
-        endDate,
-        duration: input.duration,
-        days,
-        reason: input.reason,
-        status: input.status,
-      },
-    })
+    return tx.leaveRequest.findUniqueOrThrow({ where: { id } })
   })
 
   await recordAuditLog({
@@ -378,7 +391,13 @@ export async function cancelLeave(id: string, viewer: AccessTokenPayload, meta: 
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.leaveRequest.update({ where: { id }, data: { status: "CANCELLED" } })
+    const claim = await tx.leaveRequest.updateMany({
+      where: { id, status: request.status },
+      data: { status: "CANCELLED" },
+    })
+    if (claim.count === 0) {
+      throw new ValidationError("This request can no longer be cancelled")
+    }
 
     if (request.status === "APPROVED" && request.leaveType.isPaid) {
       const year = request.startDate.getUTCFullYear()
