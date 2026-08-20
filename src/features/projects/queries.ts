@@ -2,6 +2,8 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { NotFoundError } from "@/lib/errors"
+import type { AccessTokenPayload } from "@/lib/jwt"
+import { assertVerticalVisible, getVisibleVerticalIds } from "@/features/verticals/scope"
 import type { TaskExtras, TaskFeedItem, TaskParticipantRef } from "@/features/projects/lib/types"
 
 const assigneeSelect = {
@@ -39,9 +41,14 @@ function toParticipantRef(user: ParticipantRow): TaskParticipantRef {
   }
 }
 
-export async function listProjects(includeArchived = false) {
+export async function listProjects(viewer: AccessTokenPayload, includeArchived = false) {
+  const visibleVerticalIds = await getVisibleVerticalIds(viewer)
+
   const projects = await prisma.project.findMany({
-    where: includeArchived ? {} : { status: "ACTIVE" },
+    where: {
+      ...(includeArchived ? {} : { status: "ACTIVE" }),
+      ...(visibleVerticalIds !== null ? { verticalId: { in: visibleVerticalIds } } : {}),
+    },
     include: {
       _count: { select: { tasks: true } },
       tasks: { select: { status: true } },
@@ -65,15 +72,17 @@ export async function listProjects(includeArchived = false) {
   })
 }
 
-export async function getProject(id: string) {
+export async function getProject(id: string, viewer: AccessTokenPayload) {
   const project = await prisma.project.findUnique({ where: { id } })
   if (!project) throw new NotFoundError("Project not found")
+  await assertVerticalVisible(viewer, project.verticalId)
   return project
 }
 
-export async function listProjectTasks(projectId: string) {
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
+export async function listProjectTasks(projectId: string, viewer: AccessTokenPayload) {
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, verticalId: true } })
   if (!project) throw new NotFoundError("Project not found")
+  await assertVerticalVisible(viewer, project.verticalId)
 
   const tasks = await prisma.task.findMany({
     where: { projectId, parentTaskId: null },
@@ -97,12 +106,19 @@ export async function listProjectTasks(projectId: string) {
   }))
 }
 
-export async function getTask(id: string) {
+async function assertTaskProjectVisible(taskId: string, viewer: AccessTokenPayload) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { project: { select: { verticalId: true } } } })
+  if (!task) throw new NotFoundError("Task not found")
+  await assertVerticalVisible(viewer, task.project.verticalId)
+}
+
+export async function getTask(id: string, viewer: AccessTokenPayload) {
   const task = await prisma.task.findUnique({
     where: { id },
-    include: { assignees: { select: assigneeSelect } },
+    include: { assignees: { select: assigneeSelect }, project: { select: { verticalId: true } } },
   })
   if (!task) throw new NotFoundError("Task not found")
+  await assertVerticalVisible(viewer, task.project.verticalId)
   return {
     id: task.id,
     projectId: task.projectId,
@@ -120,7 +136,9 @@ export async function getTask(id: string) {
 }
 
 /** Comments and activity log entries for a task's detail panel, merged into one time-ordered feed. */
-export async function getTaskFeed(taskId: string): Promise<TaskFeedItem[]> {
+export async function getTaskFeed(taskId: string, viewer: AccessTokenPayload): Promise<TaskFeedItem[]> {
+  await assertTaskProjectVisible(taskId, viewer)
+
   const [comments, activities] = await Promise.all([
     prisma.taskComment.findMany({
       where: { taskId },
@@ -159,7 +177,9 @@ export async function getTaskFeed(taskId: string): Promise<TaskFeedItem[]> {
 }
 
 /** Checklist, attachments, and subtasks for a task's detail panel — fetched together in one call. */
-export async function getTaskExtras(taskId: string): Promise<TaskExtras> {
+export async function getTaskExtras(taskId: string, viewer: AccessTokenPayload): Promise<TaskExtras> {
+  await assertTaskProjectVisible(taskId, viewer)
+
   const [checklistItems, attachments, subtasks] = await Promise.all([
     prisma.taskChecklistItem.findMany({
       where: { taskId },

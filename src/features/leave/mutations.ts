@@ -6,6 +6,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/leave/authorization"
+import { getManagedVerticalIds } from "@/features/verticals/scope"
 import { calculateLeaveDays } from "@/features/leave/lib/calculate-days"
 import type {
   ApplyLeaveInput,
@@ -116,7 +117,8 @@ export async function managerAction(id: string, input: LeaveActionInput, viewer:
     include: { employee: true, leaveType: true },
   })
   if (!request) throw new NotFoundError("Leave request not found")
-  if (!canActAsManager(viewer, request)) throw new ForbiddenError()
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  if (!canActAsManager(viewer, request, managedVerticalIds)) throw new ForbiddenError()
   if (request.status !== "PENDING") {
     throw new ValidationError("This request has already been actioned")
   }

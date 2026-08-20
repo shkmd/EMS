@@ -11,10 +11,10 @@ import { projectFormSchema } from "@/features/projects/schemas"
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession()
+    const session = await requireSession()
     const includeArchived = req.nextUrl.searchParams.get("includeArchived") === "true"
 
-    const projects = await listProjects(includeArchived)
+    const projects = await listProjects(session, includeArchived)
     return apiSuccess({ projects })
   } catch (error) {
     return apiError(error)

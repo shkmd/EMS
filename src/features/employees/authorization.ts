@@ -13,13 +13,17 @@ export function canViewEmployeeList(role: Role) {
   return EMPLOYEE_VIEW_LIST_ROLES.includes(role)
 }
 
-/** Whether the signed-in user may view a specific employee's full profile. */
+/** Whether the signed-in user may view a specific employee's full profile.
+ * `managedVerticalIds` (verticals the viewer manages) is optional so callers
+ * that don't need it can omit the extra lookup. */
 export function canAccessEmployee(
   viewer: AccessTokenPayload,
-  employee: { id: string; reportingManagerId: string | null }
+  employee: { id: string; reportingManagerId: string | null; verticalId?: string | null },
+  managedVerticalIds: string[] = []
 ) {
   if (canManageEmployees(viewer.role)) return true
   if (viewer.role === "MANAGER" && employee.reportingManagerId === viewer.employeeId) return true
+  if (viewer.role === "MANAGER" && employee.verticalId && managedVerticalIds.includes(employee.verticalId)) return true
   if (viewer.employeeId === employee.id) return true
   return false
 }

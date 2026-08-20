@@ -21,6 +21,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { apiFetch } from "@/lib/api-client"
 import { WEEKDAY_VALUES } from "@/features/settings/schemas"
 import { verticalFormSchema, type VerticalFormInput } from "@/features/verticals/schemas"
+import { AssigneeMultiselect } from "@/features/projects/components/assignee-multiselect"
+import type { AssigneeRef } from "@/features/projects/lib/types"
 
 const WEEKDAY_LABELS: Record<string, string> = {
   MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun",
@@ -35,6 +37,7 @@ export type VerticalEditTarget = {
   graceMinutes: number
   halfDayHours: number
   fullDayHours: number
+  managers: { id: string; firstName: string; lastName: string }[]
 } | null
 
 export function VerticalFormDialog({
@@ -49,6 +52,7 @@ export function VerticalFormDialog({
   onSaved: () => void
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [employees, setEmployees] = useState<AssigneeRef[]>([])
   const isEdit = !!target
 
   const form = useForm<VerticalFormInput>({
@@ -61,8 +65,17 @@ export function VerticalFormDialog({
       graceMinutes: "10",
       halfDayHours: "4",
       fullDayHours: "8",
+      managerIds: [],
     },
   })
+
+  useEffect(() => {
+    if (open && employees.length === 0) {
+      apiFetch<{ employees: AssigneeRef[] }>("/api/projects/employees").then((result) => {
+        if (result.success) setEmployees(result.data.employees)
+      })
+    }
+  }, [open, employees.length])
 
   useEffect(() => {
     if (open) {
@@ -74,6 +87,7 @@ export function VerticalFormDialog({
         graceMinutes: target ? String(target.graceMinutes) : "10",
         halfDayHours: target ? String(target.halfDayHours) : "4",
         fullDayHours: target ? String(target.fullDayHours) : "8",
+        managerIds: target?.managers.map((m) => m.id) ?? [],
       })
     }
   }, [open, target, form])
@@ -168,6 +182,19 @@ export function VerticalFormDialog({
                       </label>
                     ))}
                   </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="managerIds"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vertical managers</FormLabel>
+                  <FormControl>
+                    <AssigneeMultiselect options={employees} value={field.value} onChange={field.onChange} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

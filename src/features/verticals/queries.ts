@@ -15,6 +15,7 @@ export async function listVerticals() {
       halfDayHours: true,
       fullDayHours: true,
       createdAt: true,
+      managers: { select: { id: true, firstName: true, lastName: true } },
       _count: { select: { employees: { where: { deletedAt: null } } } },
     },
     orderBy: { name: "asc" },
@@ -22,7 +23,10 @@ export async function listVerticals() {
 }
 
 export async function getVerticalById(id: string) {
-  const vertical = await prisma.vertical.findUnique({ where: { id } })
+  const vertical = await prisma.vertical.findUnique({
+    where: { id },
+    include: { managers: { select: { id: true, firstName: true, lastName: true } } },
+  })
   if (!vertical) throw new NotFoundError("Vertical not found")
   return vertical
 }

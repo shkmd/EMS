@@ -5,7 +5,19 @@ import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canAccessEmployeeAttendance, canViewTeamAttendance } from "@/features/attendance/authorization"
+import { getManagedVerticalIds } from "@/features/verticals/scope"
 import type { AttendanceReportQuery } from "@/features/attendance/schemas"
+
+/** MANAGER's team scope: direct reports plus anyone in a vertical they manage. */
+async function managerEmployeeScope(viewer: AccessTokenPayload) {
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  return {
+    OR: [
+      { reportingManagerId: viewer.employeeId },
+      ...(managedVerticalIds.length > 0 ? [{ verticalId: { in: managedVerticalIds } }] : []),
+    ],
+  }
+}
 
 export async function getTodayAttendance(employeeId: string) {
   const { start, end } = utcDayRange()
@@ -19,10 +31,11 @@ export async function getTodayAttendance(employeeId: string) {
 export async function requireEmployeeForAttendance(employeeId: string, viewer: AccessTokenPayload) {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId, deletedAt: null },
-    select: { id: true, firstName: true, lastName: true, reportingManagerId: true },
+    select: { id: true, firstName: true, lastName: true, reportingManagerId: true, verticalId: true },
   })
   if (!employee) throw new NotFoundError("Employee not found")
-  if (!canAccessEmployeeAttendance(viewer, employee)) throw new ForbiddenError()
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  if (!canAccessEmployeeAttendance(viewer, employee, managedVerticalIds)) throw new ForbiddenError()
   return employee
 }
 
@@ -54,7 +67,9 @@ export async function listTeamAttendanceToday(viewer: AccessTokenPayload) {
   const { start, end } = utcDayRange()
 
   const employeeWhere =
-    viewer.role === "MANAGER" ? { deletedAt: null, reportingManagerId: viewer.employeeId } : { deletedAt: null, status: "ACTIVE" as const }
+    viewer.role === "MANAGER"
+      ? { deletedAt: null, ...(await managerEmployeeScope(viewer)) }
+      : { deletedAt: null, status: "ACTIVE" as const }
 
   const employees = await prisma.employee.findMany({
     where: employeeWhere,
@@ -100,7 +115,7 @@ export async function getAttendanceReport(filters: AttendanceReportQuery, viewer
 
   const employeeScope =
     viewer.role === "MANAGER"
-      ? { reportingManagerId: viewer.employeeId }
+      ? await managerEmployeeScope(viewer)
       : viewer.role === "EMPLOYEE"
         ? { id: viewer.employeeId ?? "__none__" }
         : {}

@@ -8,6 +8,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import type { EmployeeListQuery } from "@/features/employees/schemas"
 import { canAccessEmployee, canManageEmployees } from "@/features/employees/authorization"
+import { getManagedVerticalIds } from "@/features/verticals/scope"
 
 const employeeListSelect = {
   id: true,
@@ -24,25 +25,37 @@ const employeeListSelect = {
   designation: { select: { id: true, title: true } },
 } satisfies Prisma.EmployeeSelect
 
-export async function listEmployees(query: EmployeeListQuery, viewer: AccessTokenPayload) {
-  const where: Prisma.EmployeeWhereInput = { deletedAt: null }
-
-  if (viewer.role === "MANAGER") {
-    where.reportingManagerId = viewer.employeeId
+/** MANAGER sees their direct reports plus anyone in a vertical they manage. */
+async function managerScope(viewer: AccessTokenPayload): Promise<Prisma.EmployeeWhereInput | undefined> {
+  if (viewer.role !== "MANAGER") return undefined
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  return {
+    OR: [{ reportingManagerId: viewer.employeeId }, ...(managedVerticalIds.length > 0 ? [{ verticalId: { in: managedVerticalIds } }] : [])],
   }
+}
 
-  if (query.departmentId) where.departmentId = query.departmentId
-  if (query.status) where.status = query.status
+export async function listEmployees(query: EmployeeListQuery, viewer: AccessTokenPayload) {
+  const conditions: Prisma.EmployeeWhereInput[] = [{ deletedAt: null }]
+
+  const scope = await managerScope(viewer)
+  if (scope) conditions.push(scope)
+
+  if (query.departmentId) conditions.push({ departmentId: query.departmentId })
+  if (query.status) conditions.push({ status: query.status })
   if (query.search) {
     const search = query.search
-    where.OR = [
-      { firstName: { contains: search } },
-      { lastName: { contains: search } },
-      { employeeCode: { contains: search } },
-      { email: { contains: search } },
-      { mobile: { contains: search } },
-    ]
+    conditions.push({
+      OR: [
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { employeeCode: { contains: search } },
+        { email: { contains: search } },
+        { mobile: { contains: search } },
+      ],
+    })
   }
+
+  const where: Prisma.EmployeeWhereInput = { AND: conditions }
 
   const orderBy: Prisma.EmployeeOrderByWithRelationInput[] = (() => {
     switch (query.sortBy) {
@@ -74,23 +87,28 @@ export async function listEmployees(query: EmployeeListQuery, viewer: AccessToke
 
 /** Same filters as listEmployees, without pagination — used by export. */
 export async function listAllEmployeesForExport(query: Omit<EmployeeListQuery, "page" | "pageSize">, viewer: AccessTokenPayload) {
-  const where: Prisma.EmployeeWhereInput = { deletedAt: null }
-  if (viewer.role === "MANAGER") where.reportingManagerId = viewer.employeeId
-  if (query.departmentId) where.departmentId = query.departmentId
-  if (query.status) where.status = query.status
+  const conditions: Prisma.EmployeeWhereInput[] = [{ deletedAt: null }]
+
+  const scope = await managerScope(viewer)
+  if (scope) conditions.push(scope)
+
+  if (query.departmentId) conditions.push({ departmentId: query.departmentId })
+  if (query.status) conditions.push({ status: query.status })
   if (query.search) {
     const search = query.search
-    where.OR = [
-      { firstName: { contains: search } },
-      { lastName: { contains: search } },
-      { employeeCode: { contains: search } },
-      { email: { contains: search } },
-      { mobile: { contains: search } },
-    ]
+    conditions.push({
+      OR: [
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { employeeCode: { contains: search } },
+        { email: { contains: search } },
+        { mobile: { contains: search } },
+      ],
+    })
   }
 
   return prisma.employee.findMany({
-    where,
+    where: { AND: conditions },
     select: employeeListSelect,
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   })
@@ -115,7 +133,8 @@ export async function getEmployeeDetail(id: string, viewer: AccessTokenPayload) 
   })
 
   if (!employee) throw new NotFoundError("Employee not found")
-  if (!canAccessEmployee(viewer, employee)) throw new ForbiddenError()
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  if (!canAccessEmployee(viewer, employee, managedVerticalIds)) throw new ForbiddenError()
 
   return employee
 }

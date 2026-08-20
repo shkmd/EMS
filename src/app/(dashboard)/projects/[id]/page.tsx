@@ -23,8 +23,8 @@ export default async function ProjectDetailPage({
   const canManage = canManageProjects(session.role);
 
   const [project, tasksRaw, employees] = await Promise.all([
-    getProject(id),
-    listProjectTasks(id),
+    getProject(id, session),
+    listProjectTasks(id, session),
     listAssignableEmployees(),
   ]);
 

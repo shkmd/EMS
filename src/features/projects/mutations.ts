@@ -9,6 +9,7 @@ import { assertAllowedFile, deleteUploadedFile, saveUploadedFile, ALLOWED_DOCUME
 import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageProjects, isTaskAssignee } from "@/features/projects/authorization"
+import { assertVerticalVisible } from "@/features/verticals/scope"
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/features/projects/lib/labels"
 import type {
   ProjectFormInput,
@@ -30,9 +31,32 @@ function assertCanManage(viewer: AccessTokenPayload) {
   if (!canManageProjects(viewer.role)) throw new ForbiddenError()
 }
 
-/** Manager, or the task's own assignee — the same boundary as the self-service status update. */
-function assertCanEditTask(viewer: AccessTokenPayload, task: { assignees: { employeeId: string }[] }) {
-  if (!canManageProjects(viewer.role) && !isTaskAssignee(viewer.employeeId, task)) throw new ForbiddenError()
+/** Manager/HR/SUPER_ADMIN role check plus a per-project vertical check — a
+ * MANAGER can only manage projects in a vertical they belong to or manage;
+ * HR/SUPER_ADMIN aren't restricted by vertical. */
+async function assertCanManageProject(viewer: AccessTokenPayload, projectVerticalId: string | null) {
+  assertCanManage(viewer)
+  await assertVerticalVisible(viewer, projectVerticalId)
+}
+
+/** Manager (within their vertical), or the task's own assignee — the same boundary as the self-service status update. */
+async function assertCanEditTask(
+  viewer: AccessTokenPayload,
+  task: { assignees: { employeeId: string }[]; project: { verticalId: string | null } }
+) {
+  if (isTaskAssignee(viewer.employeeId, task)) return
+  await assertCanManageProject(viewer, task.project.verticalId)
+}
+
+/** Read-level boundary (viewing/commenting): the task's own assignee, or
+ * anyone whose vertical scope includes the task's project — broader than
+ * assertCanEditTask, which additionally requires a manage role. */
+async function assertTaskVisible(
+  viewer: AccessTokenPayload,
+  task: { assignees: { employeeId: string }[]; project: { verticalId: string | null } }
+) {
+  if (isTaskAssignee(viewer.employeeId, task)) return
+  await assertVerticalVisible(viewer, task.project.verticalId)
 }
 
 // ---------- Notifications & activity log ----------
@@ -78,12 +102,17 @@ async function notifyTaskParticipants(
 export async function createProject(input: ProjectFormInput, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManage(viewer)
 
+  const creator = viewer.employeeId
+    ? await prisma.employee.findUnique({ where: { id: viewer.employeeId }, select: { verticalId: true } })
+    : null
+
   const project = await prisma.project.create({
     data: {
       name: input.name,
       description: input.description || null,
       color: input.color,
       createdById: viewer.sub,
+      verticalId: creator?.verticalId ?? null,
     },
   })
 
@@ -92,10 +121,9 @@ export async function createProject(input: ProjectFormInput, viewer: AccessToken
 }
 
 export async function updateProject(id: string, input: ProjectFormInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
   const existing = await prisma.project.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Project not found")
+  await assertCanManageProject(viewer, existing.verticalId)
 
   const project = await prisma.project.update({
     where: { id },
@@ -112,10 +140,9 @@ export async function updateProjectStatus(
   viewer: AccessTokenPayload,
   meta: Meta
 ) {
-  assertCanManage(viewer)
-
   const existing = await prisma.project.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Project not found")
+  await assertCanManageProject(viewer, existing.verticalId)
 
   const project = await prisma.project.update({ where: { id }, data: { status: input.status } })
 
@@ -130,10 +157,9 @@ export async function updateProjectStatus(
 }
 
 export async function deleteProject(id: string, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
   const existing = await prisma.project.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Project not found")
+  await assertCanManageProject(viewer, existing.verticalId)
 
   await prisma.project.delete({ where: { id } })
   await recordAuditLog({ userId: viewer.sub, action: "PROJECT_DELETED", entityType: "Project", entityId: id, ...meta })
@@ -148,10 +174,9 @@ async function assertValidAssignees(assigneeIds: string[]) {
 }
 
 export async function createTask(projectId: string, input: TaskFormInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, verticalId: true } })
   if (!project) throw new NotFoundError("Project not found")
+  await assertCanManageProject(viewer, project.verticalId)
   await assertValidAssignees(input.assigneeIds)
 
   const maxPosition = await prisma.task.aggregate({ where: { projectId }, _max: { position: true } })
@@ -187,13 +212,12 @@ export async function createTask(projectId: string, input: TaskFormInput, viewer
 }
 
 export async function updateTask(id: string, input: TaskFormInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
   const existing = await prisma.task.findUnique({
     where: { id },
-    include: { assignees: { select: { employeeId: true } } },
+    include: { assignees: { select: { employeeId: true } }, project: { select: { verticalId: true } } },
   })
   if (!existing) throw new NotFoundError("Task not found")
+  await assertCanManageProject(viewer, existing.project.verticalId)
   await assertValidAssignees(input.assigneeIds)
 
   const changes: string[] = []
@@ -252,10 +276,10 @@ export async function updateTask(id: string, input: TaskFormInput, viewer: Acces
 export async function updateTaskStatus(id: string, input: TaskStatusUpdateInput, viewer: AccessTokenPayload, meta: Meta) {
   const existing = await prisma.task.findUnique({
     where: { id },
-    include: { assignees: { select: { employeeId: true } } },
+    include: { assignees: { select: { employeeId: true } }, project: { select: { verticalId: true } } },
   })
   if (!existing) throw new NotFoundError("Task not found")
-  if (!canManageProjects(viewer.role) && !isTaskAssignee(viewer.employeeId, existing)) throw new ForbiddenError()
+  await assertCanEditTask(viewer, existing)
 
   const task = await prisma.task.update({ where: { id }, data: { status: input.status } })
 
@@ -272,7 +296,9 @@ export async function updateTaskStatus(id: string, input: TaskStatusUpdateInput,
 
 /** Manager-only Board drag-and-drop: sets the ordering (and destination status) of every task in one column. */
 export async function reorderTasks(projectId: string, input: ReorderTasksInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { verticalId: true } })
+  if (!project) throw new NotFoundError("Project not found")
+  await assertCanManageProject(viewer, project.verticalId)
 
   const tasks = await prisma.task.findMany({
     where: { id: { in: input.orderedTaskIds }, projectId },
@@ -305,10 +331,9 @@ export async function reorderTasks(projectId: string, input: ReorderTasksInput, 
 }
 
 export async function deleteTask(id: string, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
-  const existing = await prisma.task.findUnique({ where: { id } })
+  const existing = await prisma.task.findUnique({ where: { id }, include: { project: { select: { verticalId: true } } } })
   if (!existing) throw new NotFoundError("Task not found")
+  await assertCanManageProject(viewer, existing.project.verticalId)
 
   await prisma.task.delete({ where: { id } })
   await recordAuditLog({ userId: viewer.sub, action: "TASK_DELETED", entityType: "Task", entityId: id, ...meta })
@@ -319,9 +344,10 @@ export async function deleteTask(id: string, viewer: AccessTokenPayload, meta: M
 export async function addTaskComment(taskId: string, input: TaskCommentInput, viewer: AccessTokenPayload) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: { assignees: { select: { employeeId: true } } },
+    include: { assignees: { select: { employeeId: true } }, project: { select: { verticalId: true } } },
   })
   if (!task) throw new NotFoundError("Task not found")
+  await assertTaskVisible(viewer, task)
 
   const comment = await prisma.taskComment.create({
     data: { taskId, authorId: viewer.sub, body: input.body },
@@ -338,10 +364,10 @@ export async function addTaskComment(taskId: string, input: TaskCommentInput, vi
 async function requireTaskForEdit(taskId: string, viewer: AccessTokenPayload) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: { assignees: { select: { employeeId: true } } },
+    include: { assignees: { select: { employeeId: true } }, project: { select: { verticalId: true } } },
   })
   if (!task) throw new NotFoundError("Task not found")
-  assertCanEditTask(viewer, task)
+  await assertCanEditTask(viewer, task)
   return task
 }
 
@@ -374,10 +400,12 @@ export async function deleteChecklistItem(id: string, viewer: AccessTokenPayload
 
 /** Manager-only, lightweight quick-add — single level (a subtask can't itself have subtasks). */
 export async function createSubtask(parentTaskId: string, input: CreateSubtaskInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManage(viewer)
-
-  const parent = await prisma.task.findUnique({ where: { id: parentTaskId }, select: { id: true, projectId: true, parentTaskId: true } })
+  const parent = await prisma.task.findUnique({
+    where: { id: parentTaskId },
+    select: { id: true, projectId: true, parentTaskId: true, project: { select: { verticalId: true } } },
+  })
   if (!parent) throw new NotFoundError("Task not found")
+  await assertCanManageProject(viewer, parent.project.verticalId)
   if (parent.parentTaskId) throw new ValidationError("Subtasks can't have their own subtasks")
 
   const subtask = await prisma.task.create({
@@ -425,10 +453,15 @@ export async function addTaskAttachment(taskId: string, file: File, viewer: Acce
 }
 
 export async function deleteTaskAttachment(id: string, viewer: AccessTokenPayload) {
-  const attachment = await prisma.taskAttachment.findUnique({ where: { id } })
+  const attachment = await prisma.taskAttachment.findUnique({
+    where: { id },
+    include: { task: { select: { project: { select: { verticalId: true } } } } },
+  })
   if (!attachment) throw new NotFoundError("Attachment not found")
 
-  if (!canManageProjects(viewer.role) && attachment.uploadedById !== viewer.sub) throw new ForbiddenError()
+  if (attachment.uploadedById !== viewer.sub) {
+    await assertCanManageProject(viewer, attachment.task.project.verticalId)
+  }
 
   await prisma.taskAttachment.delete({ where: { id } })
   await deleteUploadedFile(attachment.fileUrl)

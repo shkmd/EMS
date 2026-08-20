@@ -6,10 +6,10 @@ import { getTaskExtras } from "@/features/projects/queries"
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   try {
-    await requireSession()
+    const session = await requireSession()
     const { taskId } = await params
 
-    const extras = await getTaskExtras(taskId)
+    const extras = await getTaskExtras(taskId, session)
     return apiSuccess(extras)
   } catch (error) {
     return apiError(error)

@@ -10,5 +10,6 @@ export const verticalFormSchema = z.object({
   graceMinutes: z.string().min(1, "Grace period is required"),
   halfDayHours: z.string().min(1, "Half-day hours is required"),
   fullDayHours: z.string().min(1, "Full-day hours is required"),
+  managerIds: z.array(z.string()),
 })
 export type VerticalFormInput = z.infer<typeof verticalFormSchema>

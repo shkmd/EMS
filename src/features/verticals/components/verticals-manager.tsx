@@ -37,6 +37,7 @@ type Vertical = {
   graceMinutes: number
   halfDayHours: number
   fullDayHours: number
+  managers: { id: string; firstName: string; lastName: string }[]
   _count: { employees: number }
 }
 
@@ -112,6 +113,7 @@ export function VerticalsManager() {
                   <TableHead>Name</TableHead>
                   <TableHead>Hours</TableHead>
                   <TableHead>Working Days</TableHead>
+                  <TableHead>Managers</TableHead>
                   <TableHead>Employees</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -119,7 +121,7 @@ export function VerticalsManager() {
               <TableBody>
                 {verticals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                       No verticals yet — everyone uses the default working hours below.
                     </TableCell>
                   </TableRow>
@@ -138,6 +140,19 @@ export function VerticalsManager() {
                             </Badge>
                           ))}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {v.managers.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {v.managers.map((m) => (
+                              <Badge key={m.id} variant="outline">
+                                {m.firstName} {m.lastName}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{v._count.employees}</TableCell>
                       <TableCell>

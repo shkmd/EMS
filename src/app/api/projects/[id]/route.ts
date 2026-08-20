@@ -11,10 +11,10 @@ type RouteParams = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   try {
-    await requireSession()
+    const session = await requireSession()
     const { id } = await params
 
-    const project = await getProject(id)
+    const project = await getProject(id, session)
     return apiSuccess({ project })
   } catch (error) {
     return apiError(error)

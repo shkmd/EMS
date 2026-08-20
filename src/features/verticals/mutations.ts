@@ -31,7 +31,9 @@ export async function createVertical(input: VerticalFormInput, viewer: AccessTok
   assertCanManage(viewer)
 
   try {
-    const vertical = await prisma.vertical.create({ data: toVerticalData(input) })
+    const vertical = await prisma.vertical.create({
+      data: { ...toVerticalData(input), managers: { connect: input.managerIds.map((id) => ({ id })) } },
+    })
     await recordAuditLog({ userId: viewer.sub, action: "VERTICAL_CREATED", entityType: "Vertical", entityId: vertical.id, ...meta })
     return vertical
   } catch (error) {
@@ -49,7 +51,10 @@ export async function updateVertical(id: string, input: VerticalFormInput, viewe
   if (!existing) throw new NotFoundError("Vertical not found")
 
   try {
-    const vertical = await prisma.vertical.update({ where: { id }, data: toVerticalData(input) })
+    const vertical = await prisma.vertical.update({
+      where: { id },
+      data: { ...toVerticalData(input), managers: { set: input.managerIds.map((id) => ({ id })) } },
+    })
     await recordAuditLog({ userId: viewer.sub, action: "VERTICAL_UPDATED", entityType: "Vertical", entityId: id, ...meta })
     return vertical
   } catch (error) {

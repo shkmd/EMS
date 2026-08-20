@@ -13,21 +13,29 @@ export function canViewTeamLeave(role: Role) {
   return LEAVE_TEAM_VIEW_ROLES.includes(role)
 }
 
-/** Whether the viewer may act as the "manager" approver for this request. */
+/** Whether the viewer may act as the "manager" approver for this request.
+ * `managedVerticalIds` (verticals the viewer manages) is optional so callers
+ * that don't need it can omit the extra lookup. */
 export function canActAsManager(
   viewer: AccessTokenPayload,
-  request: { employee: { reportingManagerId: string | null } }
+  request: { employee: { reportingManagerId: string | null; verticalId?: string | null } },
+  managedVerticalIds: string[] = []
 ) {
   if (canActAsHr(viewer.role)) return true
-  return viewer.role === "MANAGER" && request.employee.reportingManagerId === viewer.employeeId
+  if (viewer.role !== "MANAGER") return false
+  if (request.employee.reportingManagerId === viewer.employeeId) return true
+  return !!request.employee.verticalId && managedVerticalIds.includes(request.employee.verticalId)
 }
 
 /** Whether the viewer may view this specific leave request. */
 export function canViewLeaveRequest(
   viewer: AccessTokenPayload,
-  request: { employeeId: string; employee: { reportingManagerId: string | null } }
+  request: { employeeId: string; employee: { reportingManagerId: string | null; verticalId?: string | null } },
+  managedVerticalIds: string[] = []
 ) {
   if (canActAsHr(viewer.role)) return true
-  if (viewer.role === "MANAGER" && request.employee.reportingManagerId === viewer.employeeId) return true
-  return viewer.employeeId === request.employeeId
+  if (viewer.employeeId === request.employeeId) return true
+  if (viewer.role !== "MANAGER") return false
+  if (request.employee.reportingManagerId === viewer.employeeId) return true
+  return !!request.employee.verticalId && managedVerticalIds.includes(request.employee.verticalId)
 }

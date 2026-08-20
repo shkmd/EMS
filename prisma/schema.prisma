@@ -443,6 +443,7 @@ model Employee {
   department       Department?  @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
   designation      Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
   vertical         Vertical?    @relation(fields: [verticalId], references: [id], onDelete: SetNull)
+  managedVerticals Vertical[]   @relation("VerticalManagers")
   reportingManager Employee?    @relation("ManagerSubordinates", fields: [reportingManagerId], references: [id], onDelete: SetNull)
   subordinates     Employee[]   @relation("ManagerSubordinates")
   departmentHeadOf Department?  @relation("DepartmentHead")
@@ -1126,13 +1127,16 @@ model Project {
   color       String        @default("#6366f1")
   status      ProjectStatus @default(ACTIVE)
   createdById String
+  verticalId  String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  createdBy User   @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  createdBy User      @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  vertical  Vertical? @relation(fields: [verticalId], references: [id], onDelete: SetNull)
   tasks     Task[]
 
   @@index([createdById])
+  @@index([verticalId])
   @@map("projects")
 }
 
@@ -1295,6 +1299,8 @@ model Vertical {
   updatedAt    DateTime @updatedAt
 
   employees Employee[]
+  managers  Employee[] @relation("VerticalManagers")
+  projects  Project[]
 
   @@map("verticals")
 }

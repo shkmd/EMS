@@ -13,12 +13,16 @@ export function canViewTeamAttendance(role: Role) {
   return ATTENDANCE_TEAM_VIEW_ROLES.includes(role)
 }
 
-/** Whether the viewer may see a specific employee's attendance records. */
+/** Whether the viewer may see a specific employee's attendance records.
+ * `managedVerticalIds` (verticals the viewer manages) is optional so callers
+ * that don't need it can omit the extra lookup. */
 export function canAccessEmployeeAttendance(
   viewer: AccessTokenPayload,
-  employee: { id: string; reportingManagerId: string | null }
+  employee: { id: string; reportingManagerId: string | null; verticalId?: string | null },
+  managedVerticalIds: string[] = []
 ) {
   if (canManageAttendance(viewer.role)) return true
   if (viewer.role === "MANAGER" && employee.reportingManagerId === viewer.employeeId) return true
+  if (viewer.role === "MANAGER" && employee.verticalId && managedVerticalIds.includes(employee.verticalId)) return true
   return viewer.employeeId === employee.id
 }

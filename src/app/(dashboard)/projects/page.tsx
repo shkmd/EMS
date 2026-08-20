@@ -11,7 +11,7 @@ export default async function ProjectsPage() {
   const session = await requireSession();
   const canManage = canManageProjects(session.role);
 
-  const projectsRaw = await listProjects();
+  const projectsRaw = await listProjects(session);
   const projects = projectsRaw.map((p) => ({
     ...p,
     createdAt: p.createdAt.toISOString(),
