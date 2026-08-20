@@ -20,10 +20,13 @@ export function LeaveBalanceCards({ balances }: { balances: LeaveBalanceItem[] }
             <p className="text-sm font-medium">{b.name}</p>
             <p className="text-2xl font-semibold tabular-nums">
               {b.remaining}
-              <span className="text-sm font-normal text-muted-foreground"> / {b.allocated}</span>
+              <span className="text-sm font-normal text-muted-foreground"> / {b.allocated} remaining</span>
             </p>
             {b.isPaid ? (
-              <Progress value={b.allocated > 0 ? (b.used / b.allocated) * 100 : 0} />
+              <>
+                <Progress value={b.allocated > 0 ? (b.used / b.allocated) * 100 : 0} />
+                <p className="text-xs text-muted-foreground">{b.used} used</p>
+              </>
             ) : (
               <p className="text-xs text-muted-foreground">Unpaid</p>
             )}
