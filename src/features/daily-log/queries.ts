@@ -5,6 +5,7 @@ import { utcDayRange, toUtcDateOnly } from "@/lib/date-only"
 import { ForbiddenError } from "@/lib/errors"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canViewTeamAttendance } from "@/features/attendance/authorization"
+import { getManagedVerticalIds } from "@/features/verticals/scope"
 import type { DailyTaskReportQuery } from "@/features/daily-log/schemas"
 
 export async function getMyDailyLogToday(employeeId: string) {
@@ -14,6 +15,17 @@ export async function getMyDailyLogToday(employeeId: string) {
 
 function dateKey(date: Date) {
   return date.toISOString().slice(0, 10)
+}
+
+/** MANAGER's team scope: direct reports plus anyone in a vertical they manage. */
+async function managerEmployeeScope(viewer: AccessTokenPayload) {
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  return {
+    OR: [
+      { reportingManagerId: viewer.employeeId },
+      ...(managedVerticalIds.length > 0 ? [{ verticalId: { in: managedVerticalIds } }] : []),
+    ],
+  }
 }
 
 export type DailyTaskReportRow = {
@@ -37,7 +49,7 @@ export async function getDailyTaskReport(
 ): Promise<DailyTaskReportRow[]> {
   if (!canViewTeamAttendance(viewer.role)) throw new ForbiddenError()
 
-  const employeeScope = viewer.role === "MANAGER" ? { reportingManagerId: viewer.employeeId } : {}
+  const employeeScope = viewer.role === "MANAGER" ? await managerEmployeeScope(viewer) : {}
 
   const employees = await prisma.employee.findMany({
     where: {
