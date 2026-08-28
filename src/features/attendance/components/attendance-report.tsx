@@ -24,6 +24,7 @@ type ReportRow = {
   checkIn: string | null
   checkOut: string | null
   workingMinutes: number
+  lateMinutes: number
   employee: { id: string; employeeCode: string; firstName: string; lastName: string; department: { name: string } | null }
 }
 
@@ -160,6 +161,7 @@ export function AttendanceReport({
                   <TableHead>Status</TableHead>
                   <TableHead>In</TableHead>
                   <TableHead>Out</TableHead>
+                  <TableHead>Late</TableHead>
                   <TableHead>Hours</TableHead>
                   {canManage && <TableHead className="w-10" />}
                 </TableRow>
@@ -167,7 +169,7 @@ export function AttendanceReport({
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 8 : 7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={canManage ? 9 : 8} className="h-24 text-center text-muted-foreground">
                       No records for this range.
                     </TableCell>
                   </TableRow>
@@ -186,6 +188,13 @@ export function AttendanceReport({
                       </TableCell>
                       <TableCell>{formatTime(row.checkIn)}</TableCell>
                       <TableCell>{formatTime(row.checkOut)}</TableCell>
+                      <TableCell>
+                        {row.lateMinutes > 0 ? (
+                          <span className="text-amber-600 dark:text-amber-500">{row.lateMinutes}m</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>{(row.workingMinutes / 60).toFixed(1)}</TableCell>
                       {canManage && (
                         <TableCell>

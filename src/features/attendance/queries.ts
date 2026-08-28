@@ -6,6 +6,9 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canAccessEmployeeAttendance, canViewTeamAttendance } from "@/features/attendance/authorization"
 import { getManagedVerticalIds } from "@/features/verticals/scope"
+import { getWorkingHoursMap } from "@/features/verticals/queries"
+import { getCompanySettings } from "@/features/settings/queries"
+import { getLateMinutes } from "@/features/attendance/lib/late"
 import type { AttendanceReportQuery } from "@/features/attendance/schemas"
 
 /** MANAGER's team scope: direct reports plus anyone in a vertical they manage. */
@@ -98,16 +101,33 @@ export async function listTeamAttendanceToday(viewer: AccessTokenPayload) {
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   })
 
-  return employees.map((e) => ({
-    id: e.id,
-    firstName: e.firstName,
-    lastName: e.lastName,
-    profilePhotoUrl: e.profilePhotoUrl,
-    department: e.department?.name ?? null,
-    today: e.attendances[0] ?? null,
-    screenActivity: e.screenActivities[0] ?? null,
-    dailyLog: e.dailyLogs[0] ?? null,
-  }))
+  const [workingHoursMap, companySettings] = await Promise.all([
+    getWorkingHoursMap(employees.map((e) => e.id)),
+    getCompanySettings(),
+  ])
+  const fallbackHours = { startTime: "09:00", graceMinutes: 10 }
+
+  return employees.map((e) => {
+    const today = e.attendances[0] ?? null
+    return {
+      id: e.id,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      profilePhotoUrl: e.profilePhotoUrl,
+      department: e.department?.name ?? null,
+      today: today && {
+        ...today,
+        lateMinutes: getLateMinutes(
+          today.checkIn,
+          today.date,
+          workingHoursMap.get(e.id) ?? fallbackHours,
+          companySettings.timezone
+        ),
+      },
+      screenActivity: e.screenActivities[0] ?? null,
+      dailyLog: e.dailyLogs[0] ?? null,
+    }
+  })
 }
 
 export async function getAttendanceReport(filters: AttendanceReportQuery, viewer: AccessTokenPayload) {
@@ -124,7 +144,7 @@ export async function getAttendanceReport(filters: AttendanceReportQuery, viewer
     await requireEmployeeForAttendance(filters.employeeId, viewer)
   }
 
-  return prisma.attendance.findMany({
+  const records = await prisma.attendance.findMany({
     where: {
       date: { gte: new Date(filters.dateFrom), lte: new Date(filters.dateTo) },
       employee: {
@@ -154,4 +174,15 @@ export async function getAttendanceReport(filters: AttendanceReportQuery, viewer
     },
     orderBy: [{ date: "desc" }, { employee: { firstName: "asc" } }],
   })
+
+  const [workingHoursMap, companySettings] = await Promise.all([
+    getWorkingHoursMap([...new Set(records.map((r) => r.employee.id))]),
+    getCompanySettings(),
+  ])
+  const fallbackHours = { startTime: "09:00", graceMinutes: 10 }
+
+  return records.map((r) => ({
+    ...r,
+    lateMinutes: getLateMinutes(r.checkIn, r.date, workingHoursMap.get(r.employee.id) ?? fallbackHours, companySettings.timezone),
+  }))
 }

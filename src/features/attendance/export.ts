@@ -10,6 +10,7 @@ type ReportRow = {
   checkOut: Date | null
   workingMinutes: number
   breakMinutes: number
+  lateMinutes: number
   employee: { employeeCode: string; firstName: string; lastName: string; department: { name: string } | null }
 }
 
@@ -21,6 +22,7 @@ const COLUMNS = [
   { header: "Status", key: "status", width: 16 },
   { header: "Check In", key: "checkIn", width: 12 },
   { header: "Check Out", key: "checkOut", width: 12 },
+  { header: "Late (min)", key: "lateMinutes", width: 12 },
   { header: "Working Hours", key: "workingHours", width: 14 },
 ]
 
@@ -33,6 +35,7 @@ function toRow(r: ReportRow) {
     status: r.status.replace(/_/g, " "),
     checkIn: r.checkIn ? format(r.checkIn, "HH:mm") : "—",
     checkOut: r.checkOut ? format(r.checkOut, "HH:mm") : "—",
+    lateMinutes: r.lateMinutes > 0 ? String(r.lateMinutes) : "—",
     workingHours: (r.workingMinutes / 60).toFixed(2),
   }
 }

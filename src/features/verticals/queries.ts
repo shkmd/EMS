@@ -56,6 +56,30 @@ export async function getWorkingHoursForEmployee(employeeId?: string | null) {
     if (employee?.vertical) return employee.vertical
   }
 
+  return getFallbackWorkingHours()
+}
+
+async function getFallbackWorkingHours() {
   const settings = await prisma.workingHoursSettings.findUnique({ where: { id: 1 } })
   return settings ?? { id: 1, updatedAt: new Date(), ...DEFAULT_WORKING_HOURS }
+}
+
+/** Same resolution as getWorkingHoursForEmployee, batched for many employees
+ * at once (e.g. a team attendance view or report) — one query instead of N. */
+export async function getWorkingHoursMap(employeeIds: string[]) {
+  const map = new Map<string, { startTime: string; graceMinutes: number }>()
+  if (employeeIds.length === 0) return map
+
+  const [employees, fallback] = await Promise.all([
+    prisma.employee.findMany({
+      where: { id: { in: employeeIds } },
+      select: { id: true, vertical: { select: { startTime: true, graceMinutes: true } } },
+    }),
+    getFallbackWorkingHours(),
+  ])
+
+  for (const e of employees) {
+    map.set(e.id, e.vertical ?? fallback)
+  }
+  return map
 }

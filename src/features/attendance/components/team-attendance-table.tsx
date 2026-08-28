@@ -29,6 +29,7 @@ type TeamMember = {
     checkOut: string | null
     breakMinutes: number
     breaks: Break[]
+    lateMinutes: number
   } | null
   screenActivity: { activeSeconds: number; idleSeconds: number; lastSeenAt: string | null } | null
   dailyLog: { note: string; updatedAt: string } | null
@@ -157,7 +158,16 @@ export function TeamAttendanceTable({
                           <Badge variant="outline">Not marked</Badge>
                         )}
                       </TableCell>
-                      <TableCell>{formatTime(member.today?.checkIn ?? null)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {formatTime(member.today?.checkIn ?? null)}
+                          {!!member.today?.lateMinutes && (
+                            <span className="text-xs text-amber-600 dark:text-amber-500">
+                              +{member.today.lateMinutes}m
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{formatTime(member.today?.checkOut ?? null)}</TableCell>
                       <TableCell>
                         {(() => {
