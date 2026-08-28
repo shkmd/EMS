@@ -25,6 +25,9 @@ type Option = { id: string; label: string }
 type EmployeeFormProps = {
   mode: "create" | "edit"
   employeeId?: string
+  /** When set, the newly created employee is linked back to this hired candidate
+   * (see features/recruitment) and onboarding is started automatically. */
+  linkedCandidateId?: string
   defaultValues?: Partial<EmployeeFormInput>
   departments: Option[]
   designations: (Option & { departmentId: string | null })[]
@@ -75,7 +78,16 @@ const emptyDefaults: EmployeeFormInput = {
   status: "ACTIVE",
 }
 
-export function EmployeeForm({ mode, employeeId, defaultValues, departments, designations, managers, verticals }: EmployeeFormProps) {
+export function EmployeeForm({
+  mode,
+  employeeId,
+  linkedCandidateId,
+  defaultValues,
+  departments,
+  designations,
+  managers,
+  verticals,
+}: EmployeeFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeTab, setActiveTab] = useState<(typeof TAB_ORDER)[number]>("personal")
@@ -146,6 +158,16 @@ export function EmployeeForm({ mode, employeeId, defaultValues, departments, des
       if (!result.success) {
         toast.error(result.error.message)
         return
+      }
+
+      if (mode === "create" && linkedCandidateId) {
+        const linkResult = await apiFetch(`/api/recruitment/candidates/${linkedCandidateId}/hire`, {
+          method: "POST",
+          body: { employeeId: result.data.employee.id },
+        })
+        if (!linkResult.success) {
+          toast.error(`Employee created, but linking the candidate failed: ${linkResult.error.message}`)
+        }
       }
 
       toast.success(mode === "create" ? (result.message ?? "Employee created") : "Employee updated")

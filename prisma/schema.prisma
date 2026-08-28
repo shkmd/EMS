@@ -242,6 +242,37 @@ enum TaskPriority {
   URGENT
 }
 
+enum JobOpeningStatus {
+  OPEN
+  ON_HOLD
+  CLOSED
+  FILLED
+}
+
+enum CandidateStage {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum InterviewRecommendation {
+  STRONG_YES
+  YES
+  NO
+  STRONG_NO
+}
+
 // ============================================================================
 // Auth & Access Control
 // ============================================================================
@@ -278,6 +309,8 @@ model User {
   taskComments               TaskComment[]
   taskActivities             TaskActivity[]
   taskAttachments            TaskAttachment[]
+  jobOpeningsCreated         JobOpening[]              @relation("JobOpeningCreatedBy")
+  interviewsCreated          Interview[]               @relation("InterviewCreatedBy")
 
   @@index([role])
   @@map("users")
@@ -348,6 +381,7 @@ model Department {
   employees     Employee[]     @relation("EmployeeDepartment")
   designations  Designation[]
   announcements Announcement[]
+  jobOpenings   JobOpening[]
 
   @@map("departments")
 }
@@ -362,6 +396,7 @@ model Designation {
 
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   employees  Employee[]
+  jobOpenings JobOpening[]
 
   @@unique([title, departmentId])
   @@map("designations")
@@ -471,6 +506,8 @@ model Employee {
   notifications          Notification[]
   taskAssignments        TaskAssignee[]
   subscriptionsToNotify  Subscription[]
+  hiredFromCandidate     Candidate?              @relation("CandidateHiredEmployee")
+  interviewPanelist      InterviewPanelist[]
 
   @@index([departmentId])
   @@index([designationId])
@@ -1298,9 +1335,10 @@ model Vertical {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  employees Employee[]
-  managers  Employee[] @relation("VerticalManagers")
-  projects  Project[]
+  employees   Employee[]
+  managers    Employee[] @relation("VerticalManagers")
+  projects    Project[]
+  jobOpenings JobOpening[]
 
   @@map("verticals")
 }
@@ -1342,4 +1380,109 @@ model SystemSettings {
   updatedAt              DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// ============================================================================
+// Recruitment (Applicant Tracking)
+// ============================================================================
+
+model JobOpening {
+  id                String           @id @default(cuid())
+  title             String
+  departmentId      String?
+  designationId     String?
+  verticalId        String?
+  employmentType    EmploymentType   @default(FULL_TIME)
+  numberOfPositions Int              @default(1)
+  description       String?          @db.Text
+  requirements      String?          @db.Text
+  status            JobOpeningStatus @default(OPEN)
+  createdById       String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  department  Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  vertical    Vertical?    @relation(fields: [verticalId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation("JobOpeningCreatedBy", fields: [createdById], references: [id])
+  candidates  Candidate[]
+
+  @@index([departmentId])
+  @@index([verticalId])
+  @@index([status])
+  @@map("job_openings")
+}
+
+model Candidate {
+  id              String         @id @default(cuid())
+  jobOpeningId    String
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  resumeUrl       String?
+  resumeFileName  String?
+  coverLetter     String?        @db.Text
+  source          String?
+  stage           CandidateStage @default(APPLIED)
+  rejectionReason String?        @db.Text
+  hiredEmployeeId String?        @unique
+  appliedAt       DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  jobOpening    JobOpening  @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  hiredEmployee Employee?   @relation("CandidateHiredEmployee", fields: [hiredEmployeeId], references: [id], onDelete: SetNull)
+  interviews    Interview[]
+
+  @@index([jobOpeningId])
+  @@index([stage])
+  @@map("candidates")
+}
+
+model Interview {
+  id              String          @id @default(cuid())
+  candidateId     String
+  roundName       String
+  scheduledAt     DateTime
+  durationMinutes Int?
+  location        String?
+  status          InterviewStatus @default(SCHEDULED)
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  candidate Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("InterviewCreatedBy", fields: [createdById], references: [id])
+  panelists InterviewPanelist[]
+
+  @@index([candidateId])
+  @@map("interviews")
+}
+
+model InterviewPanelist {
+  id          String   @id @default(cuid())
+  interviewId String
+  employeeId  String
+  createdAt   DateTime @default(now())
+
+  interview Interview          @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  employee  Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  feedback  InterviewFeedback?
+
+  @@unique([interviewId, employeeId])
+  @@map("interview_panelists")
+}
+
+model InterviewFeedback {
+  id             String                   @id @default(cuid())
+  panelistId     String                   @unique
+  rating         Int
+  recommendation InterviewRecommendation
+  comments       String?                  @db.Text
+  submittedAt    DateTime                 @default(now())
+
+  panelist InterviewPanelist @relation(fields: [panelistId], references: [id], onDelete: Cascade)
+
+  @@map("interview_feedback")
 }
