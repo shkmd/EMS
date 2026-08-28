@@ -21,6 +21,7 @@ import {
   LogIn,
   LogOut,
   Briefcase,
+  GraduationCap,
 } from "lucide-react"
 
 import type { Role } from "@prisma/client"
@@ -52,6 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Departments", href: "/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Designations", href: "/designations", icon: IdCard, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Recruitment", href: "/recruitment", icon: Briefcase },
+      { label: "Learning", href: "/learning", icon: GraduationCap },
       { label: "Onboarding", href: "/onboarding", icon: LogIn, roles: ["SUPER_ADMIN", "HR"] },
       { label: "Offboarding", href: "/offboarding", icon: LogOut, roles: ["SUPER_ADMIN", "HR"] },
     ],

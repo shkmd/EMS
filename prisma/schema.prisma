@@ -273,6 +273,19 @@ enum InterviewRecommendation {
   STRONG_NO
 }
 
+enum EnrollmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SkillProficiency {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
 // ============================================================================
 // Auth & Access Control
 // ============================================================================
@@ -311,6 +324,8 @@ model User {
   taskAttachments            TaskAttachment[]
   jobOpeningsCreated         JobOpening[]              @relation("JobOpeningCreatedBy")
   interviewsCreated          Interview[]               @relation("InterviewCreatedBy")
+  coursesCreated             Course[]                  @relation("CourseCreatedBy")
+  enrollmentsAssigned        CourseEnrollment[]        @relation("EnrollmentAssignedBy")
 
   @@index([role])
   @@map("users")
@@ -508,6 +523,8 @@ model Employee {
   subscriptionsToNotify  Subscription[]
   hiredFromCandidate     Candidate?              @relation("CandidateHiredEmployee")
   interviewPanelist      InterviewPanelist[]
+  courseEnrollments      CourseEnrollment[]
+  skills                 EmployeeSkill[]
 
   @@index([departmentId])
   @@index([designationId])
@@ -1485,4 +1502,102 @@ model InterviewFeedback {
   panelist InterviewPanelist @relation(fields: [panelistId], references: [id], onDelete: Cascade)
 
   @@map("interview_feedback")
+}
+
+// ============================================================================
+// Learning & Development
+// ============================================================================
+
+model Course {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?  @db.Text
+  category       String?
+  durationMinutes Int?
+  contentUrl     String?
+  contentFileName String?
+  // Completing this course (and passing its quiz, if any) upserts an
+  // EmployeeSkill of this name at BEGINNER — the one link between the course
+  // catalog and the skill matrix, kept intentionally simple (see
+  // completeEnrollment in features/learning/mutations.ts).
+  skillGranted   String?
+  isPublished    Boolean  @default(false)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy   User              @relation("CourseCreatedBy", fields: [createdById], references: [id])
+  quiz        Quiz?
+  enrollments CourseEnrollment[]
+
+  @@index([isPublished])
+  @@map("courses")
+}
+
+model Quiz {
+  id           String   @id @default(cuid())
+  courseId     String   @unique
+  passingScore Int      @default(70)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id                 String @id @default(cuid())
+  quizId             String
+  text               String @db.Text
+  options            Json // string[] of answer choices
+  correctOptionIndex Int
+  position           Int    @default(0)
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@map("quiz_questions")
+}
+
+model CourseEnrollment {
+  id                 String           @id @default(cuid())
+  courseId           String
+  employeeId         String
+  status             EnrollmentStatus @default(ASSIGNED)
+  progressPercent    Int              @default(0)
+  quizScore          Int?
+  quizPassed         Boolean?
+  certificateIssuedAt DateTime?
+  assignedById       String
+  assignedAt         DateTime         @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignedBy User     @relation("EnrollmentAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([courseId, employeeId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("course_enrollments")
+}
+
+model EmployeeSkill {
+  id                  String            @id @default(cuid())
+  employeeId          String
+  name                String
+  proficiency         SkillProficiency  @default(BEGINNER)
+  notes               String?           @db.Text
+  certifiedByCourseId String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, name])
+  @@index([employeeId])
+  @@map("employee_skills")
 }
