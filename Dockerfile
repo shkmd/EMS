@@ -34,6 +34,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+# Platforms without Compose's "run migrate service, then start app" ordering
+# (e.g. Railway) instead run migrations from this image's own start command
+# (see railway.json). The standalone output above only traces what the
+# Next.js server itself needs, so `prisma` and `tsx` (devDependencies, CLI
+# tools, never imported by app code) aren't in it — pull in the full
+# node_modules so those CLIs exist here too.
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 USER nextjs
