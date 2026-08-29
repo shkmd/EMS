@@ -16,6 +16,11 @@ COPY . .
 ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 RUN npx prisma generate
+# The build host is memory-constrained; Next.js's default V8 heap ceiling
+# (~1GB) is no longer enough for this codebase's compile step. This only
+# affects the build stage — the runtime image starts a fresh stage below
+# and does not inherit it.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN npm run build
 
 # ---- Runtime ----
