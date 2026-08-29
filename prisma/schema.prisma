@@ -286,6 +286,14 @@ enum SkillProficiency {
   EXPERT
 }
 
+enum PoshCaseStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  INQUIRY_IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
 // ============================================================================
 // Auth & Access Control
 // ============================================================================
@@ -326,6 +334,9 @@ model User {
   interviewsCreated          Interview[]               @relation("InterviewCreatedBy")
   coursesCreated             Course[]                  @relation("CourseCreatedBy")
   enrollmentsAssigned        CourseEnrollment[]        @relation("EnrollmentAssignedBy")
+  policiesCreated            Policy[]                  @relation("PolicyCreatedBy")
+  poshCaseUpdatesAuthored    PoshCaseUpdate[]          @relation("PoshCaseUpdateAuthor")
+  poshCaseEvidenceUploaded   PoshCaseEvidence[]        @relation("PoshCaseEvidenceUploadedBy")
 
   @@index([role])
   @@map("users")
@@ -525,6 +536,10 @@ model Employee {
   interviewPanelist      InterviewPanelist[]
   courseEnrollments      CourseEnrollment[]
   skills                 EmployeeSkill[]
+  policyAcknowledgments  PolicyAcknowledgment[]
+  poshCommitteeMembership PoshCommitteeMember?
+  poshCasesFiled         PoshCase[]              @relation("PoshComplainant")
+  poshCasesAsRespondent  PoshCase[]              @relation("PoshRespondent")
 
   @@index([departmentId])
   @@index([designationId])
@@ -1600,4 +1615,136 @@ model EmployeeSkill {
   @@unique([employeeId, name])
   @@index([employeeId])
   @@map("employee_skills")
+}
+
+// ============================================================================
+// HR Policies & Handbook
+// ============================================================================
+
+model Policy {
+  id                     String    @id @default(cuid())
+  title                  String
+  category               String?
+  content                String?   @db.Text
+  fileUrl                String?
+  fileName               String?
+  version                String?
+  effectiveDate          DateTime? @db.Date
+  isPublished            Boolean   @default(false)
+  requiresAcknowledgment Boolean   @default(false)
+  createdById            String
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  createdBy       User                   @relation("PolicyCreatedBy", fields: [createdById], references: [id])
+  acknowledgments PolicyAcknowledgment[]
+
+  @@index([isPublished])
+  @@map("policies")
+}
+
+model PolicyAcknowledgment {
+  id             String   @id @default(cuid())
+  policyId       String
+  employeeId     String
+  acknowledgedAt DateTime @default(now())
+
+  policy   Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, employeeId])
+  @@index([employeeId])
+  @@map("policy_acknowledgments")
+}
+
+// ============================================================================
+// POSH Case Management
+//
+// Confidentiality model (deliberate, confirmed with the business owner): a
+// case's content (complainant, respondent, description, evidence) is visible
+// ONLY to the committee members assigned to that specific case — not to
+// SUPER_ADMIN/HR by default, and not to other committee members who aren't
+// assigned. Admins can see case existence/status/case number only, which is
+// enough to manage committee assignment without reading the complaint itself.
+// See features/posh/authorization.ts and features/posh/queries.ts.
+// ============================================================================
+
+model PoshCommitteeMember {
+  id                 String   @id @default(cuid())
+  employeeId         String   @unique
+  isPresidingOfficer Boolean  @default(false)
+  addedAt            DateTime @default(now())
+
+  employee    Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignments PoshCaseAssignment[]
+
+  @@map("posh_committee_members")
+}
+
+model PoshCase {
+  id                    String         @id @default(cuid())
+  caseNumber            String         @unique
+  complainantId         String
+  respondentName        String
+  respondentEmployeeId  String?
+  incidentDate          DateTime?      @db.Date
+  description           String         @db.Text
+  status                PoshCaseStatus @default(SUBMITTED)
+  outcome               String?        @db.Text
+  resolvedAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  complainant        Employee             @relation("PoshComplainant", fields: [complainantId], references: [id])
+  respondentEmployee Employee?            @relation("PoshRespondent", fields: [respondentEmployeeId], references: [id], onDelete: SetNull)
+  assignments        PoshCaseAssignment[]
+  evidence           PoshCaseEvidence[]
+  updates            PoshCaseUpdate[]
+
+  @@index([status])
+  @@index([complainantId])
+  @@map("posh_cases")
+}
+
+model PoshCaseAssignment {
+  id                String   @id @default(cuid())
+  caseId            String
+  committeeMemberId String
+  assignedAt        DateTime @default(now())
+
+  case            PoshCase             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  committeeMember PoshCommitteeMember  @relation(fields: [committeeMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, committeeMemberId])
+  @@index([committeeMemberId])
+  @@map("posh_case_assignments")
+}
+
+model PoshCaseEvidence {
+  id           String   @id @default(cuid())
+  caseId       String
+  fileUrl      String
+  fileName     String
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  case       PoshCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("PoshCaseEvidenceUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([caseId])
+  @@map("posh_case_evidence")
+}
+
+model PoshCaseUpdate {
+  id        String   @id @default(cuid())
+  caseId    String
+  authorId  String
+  note      String   @db.Text
+  createdAt DateTime @default(now())
+
+  case   PoshCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author User     @relation("PoshCaseUpdateAuthor", fields: [authorId], references: [id])
+
+  @@index([caseId])
+  @@map("posh_case_updates")
 }

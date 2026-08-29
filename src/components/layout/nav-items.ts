@@ -22,6 +22,8 @@ import {
   LogOut,
   Briefcase,
   GraduationCap,
+  BookText,
+  ShieldCheck,
 } from "lucide-react"
 
 import type { Role } from "@prisma/client"
@@ -84,6 +86,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Assets", href: "/assets", icon: Laptop },
       { label: "Announcements", href: "/announcements", icon: Megaphone },
       { label: "Messages", href: "/messages", icon: MessageSquare },
+      { label: "HR Policies", href: "/policies", icon: BookText },
+      { label: "POSH", href: "/posh", icon: ShieldCheck },
       { label: "Subscriptions", href: "/subscriptions", icon: BellRing, roles: ["SUPER_ADMIN", "HR"] },
     ],
   },
