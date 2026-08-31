@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { format, startOfMonth } from "date-fns"
+import { format, startOfMonth, endOfMonth } from "date-fns"
 import { FileSpreadsheet, FileText, Loader2, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -27,9 +27,19 @@ type ReportRow = {
 export function LateSummaryReportCard({ departments }: { departments: { id: string; name: string }[] }) {
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"))
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [month, setMonth] = useState(format(new Date(), "yyyy-MM"))
   const [departmentId, setDepartmentId] = useState(ALL)
   const [rows, setRows] = useState<ReportRow[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  function handleMonthChange(value: string) {
+    setMonth(value)
+    if (!value) return
+    const [year, monthNum] = value.split("-").map(Number)
+    const monthDate = new Date(year, monthNum - 1, 1)
+    setDateFrom(format(startOfMonth(monthDate), "yyyy-MM-dd"))
+    setDateTo(format(endOfMonth(monthDate), "yyyy-MM-dd"))
+  }
 
   function buildParams() {
     const params = new URLSearchParams({ dateFrom, dateTo })
@@ -68,6 +78,10 @@ export function LateSummaryReportCard({ departments }: { departments: { id: stri
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">To</label>
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Or pick a month</label>
+            <Input type="month" value={month} onChange={(e) => handleMonthChange(e.target.value)} className="w-40" />
           </div>
           <Select value={departmentId} onValueChange={setDepartmentId}>
             <SelectTrigger className="w-44">

@@ -60,6 +60,26 @@ export const ATTENDANCE_STATUS_DOT: Record<string, string> = {
   LOP: "bg-stone-500",
 }
 
+// Same palette as ATTENDANCE_STATUS_DOT/BADGE above, as literal hex values —
+// SVG chart fills need real color strings, not Tailwind classes.
+export const ATTENDANCE_STATUS_CHART_COLOR: Record<string, string> = {
+  PRESENT: "#10b981",
+  WORK_FROM_HOME: "#3b82f6",
+  HALF_DAY: "#f59e0b",
+  ABSENT: "#ef4444",
+  LEAVE: "#8b5cf6",
+  HOLIDAY: "#14b8a6",
+  WEEK_OFF: "#9ca3af",
+  OUTDOOR_DUTY: "#06b6d4",
+  COMPENSATORY_OFF: "#f97316",
+  PERMISSION: "#ec4899",
+  WORK_ON_HOLIDAY: "#6366f1",
+  CL: "#d946ef",
+  SL: "#f43f5e",
+  EL: "#84cc16",
+  LOP: "#78716c",
+}
+
 export const ATTENDANCE_STATUS_BADGE: Record<string, string> = {
   PRESENT: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   WORK_FROM_HOME: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
