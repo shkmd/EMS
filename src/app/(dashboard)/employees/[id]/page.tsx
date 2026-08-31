@@ -23,6 +23,7 @@ import { AccountAccessCard } from "@/features/employees/components/account-acces
 import { canViewTeamLeave } from "@/features/leave/authorization";
 import { getLeaveBalances } from "@/features/leave/queries";
 import { LeaveBalanceCards } from "@/features/leave/components/leave-balance-cards";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Employee Profile | EMS" };
 
@@ -62,6 +63,7 @@ export default async function EmployeeDetailPage({
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={employee.id} label={`${employee.firstName} ${employee.lastName}`} />
       <Card>
         <CardContent className="flex flex-wrap items-center gap-4">
           <EmployeePhotoUpload

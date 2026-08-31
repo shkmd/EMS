@@ -7,6 +7,7 @@ import { requireSession } from "@/features/auth/session";
 import { getJobOpening, listCandidates } from "@/features/recruitment/queries";
 import { JOB_OPENING_STATUS_BADGE, JOB_OPENING_STATUS_LABEL, EMPLOYMENT_TYPE_LABEL } from "@/features/recruitment/lib/labels";
 import { CandidatePipeline } from "@/features/recruitment/components/candidate-pipeline";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Job Opening | EMS" };
 
@@ -19,6 +20,7 @@ export default async function JobOpeningDetailPage({ params }: { params: Promise
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={jobOpening.id} label={jobOpening.title} />
       <div>
         <Link href="/recruitment" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-3.5" /> All openings

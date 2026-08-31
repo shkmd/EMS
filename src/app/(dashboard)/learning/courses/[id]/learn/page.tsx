@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireSession } from "@/features/auth/session";
 import { getCourseForLearner } from "@/features/learning/queries";
 import { CourseLearnerView } from "@/features/learning/components/course-learner-view";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Course | EMS" };
 
@@ -13,6 +14,7 @@ export default async function CourseLearnPage({ params }: { params: Promise<{ id
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={course.id} label={course.title} />
       <CourseLearnerView
         course={course}
         initialEnrollment={

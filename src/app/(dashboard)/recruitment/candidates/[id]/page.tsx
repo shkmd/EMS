@@ -6,6 +6,7 @@ import { requireSession } from "@/features/auth/session";
 import { canManageRecruitment } from "@/features/recruitment/authorization";
 import { getCandidate } from "@/features/recruitment/queries";
 import { CandidateDetailView } from "@/features/recruitment/components/candidate-detail-view";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Candidate | EMS" };
 
@@ -25,6 +26,7 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={candidate.id} label={`${candidate.firstName} ${candidate.lastName}`} />
       <div>
         <Link
           href={`/recruitment/${candidate.jobOpening.id}`}

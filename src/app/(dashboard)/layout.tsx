@@ -7,6 +7,7 @@ import { getSession } from "@/features/auth/session";
 import { isMaintenanceModeEnabled, getCompanySettings } from "@/features/settings/queries";
 import { ActivityTracker } from "@/features/activity/components/activity-tracker";
 import { CallProvider } from "@/features/messaging/components/call-provider";
+import { BreadcrumbProvider } from "@/components/layout/page-breadcrumb";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -43,20 +44,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : user.email.split("@")[0]!;
 
   return (
-    <CallProvider currentUserId={session.sub} currentUserName={displayName}>
-      <SidebarProvider>
-        {session.employeeId && <ActivityTracker />}
-        <AppSidebar role={user.role} companyName={companySettings.companyName} hasLogo={!!companySettings.logoUrl} />
-        <SidebarInset>
-          <Topbar
-            name={displayName}
-            email={user.email}
-            role={user.role}
-            avatarUrl={user.employee?.profilePhotoUrl}
-          />
-          <main className="flex flex-1 flex-col gap-6 p-6 md:p-8">{children}</main>
-        </SidebarInset>
-      </SidebarProvider>
-    </CallProvider>
+    <BreadcrumbProvider>
+      <CallProvider currentUserId={session.sub} currentUserName={displayName}>
+        <SidebarProvider>
+          {session.employeeId && <ActivityTracker />}
+          <AppSidebar role={user.role} companyName={companySettings.companyName} hasLogo={!!companySettings.logoUrl} />
+          <SidebarInset>
+            <Topbar
+              name={displayName}
+              email={user.email}
+              role={user.role}
+              avatarUrl={user.employee?.profilePhotoUrl}
+            />
+            <main className="flex flex-1 flex-col gap-6 p-6 md:p-8">{children}</main>
+          </SidebarInset>
+        </SidebarProvider>
+      </CallProvider>
+    </BreadcrumbProvider>
   );
 }

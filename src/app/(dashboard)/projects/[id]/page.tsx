@@ -7,6 +7,7 @@ import { requireSession } from "@/features/auth/session";
 import { canManageProjects } from "@/features/projects/authorization";
 import { getProject, listProjectTasks, listAssignableEmployees } from "@/features/projects/queries";
 import { ProjectTasksWorkspace } from "@/features/projects/components/project-tasks-workspace";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Project | EMS" };
 
@@ -38,6 +39,7 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={project.id} label={project.name} />
       <div>
         <Link href="/projects" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-3.5" /> All projects

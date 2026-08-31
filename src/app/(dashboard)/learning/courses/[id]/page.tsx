@@ -5,6 +5,7 @@ import { requireSession } from "@/features/auth/session";
 import { canManageLearning } from "@/features/learning/authorization";
 import { getCourseForManage, listEnrollmentsForCourse } from "@/features/learning/queries";
 import { CourseManageDetail } from "@/features/learning/components/course-manage-detail";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Manage Course | EMS" };
 
@@ -18,6 +19,7 @@ export default async function CourseManagePage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={course.id} label={course.title} />
       <CourseManageDetail
         initialCourse={course}
         initialEnrollments={enrollments.map((e) => ({

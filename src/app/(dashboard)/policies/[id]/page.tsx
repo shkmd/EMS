@@ -4,6 +4,7 @@ import { requireSession } from "@/features/auth/session";
 import { canManagePolicies } from "@/features/policies/authorization";
 import { getPolicy, listAcknowledgmentsForPolicy } from "@/features/policies/queries";
 import { PolicyDetailView } from "@/features/policies/components/policy-detail-view";
+import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Policy | EMS" };
 
@@ -23,6 +24,7 @@ export default async function PolicyDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <SetBreadcrumbLabel id={policy.id} label={policy.title} />
       <PolicyDetailView
         policy={{
           id: policy.id,
