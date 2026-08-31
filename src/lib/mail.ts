@@ -64,7 +64,47 @@ function buildTransporter(config: ResolvedMailConfig) {
     port: config.port,
     secure: config.secure,
     auth: config.user ? { user: config.user, pass: config.password ?? undefined } : undefined,
+    // Raw SMTP ports (25/465/587/2525) are blocked outbound on some hosts
+    // (confirmed on Railway — every SMTP port times out there). Without an
+    // explicit timeout, nodemailer's default is minutes long, so a blocked
+    // network turns into a multi-minute hang on whatever request sent the
+    // email instead of a fast, visible failure.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 10_000,
   })
+}
+
+/**
+ * SendGrid's SMTP relay is blocked outbound on some hosts (e.g. Railway
+ * blocks all SMTP ports for abuse prevention), so SendGrid is sent over its
+ * HTTPS API instead — same API key, just not raw SMTP. The SMTP "password"
+ * field already holds that API key (SendGrid's SMTP convention is
+ * username="apikey", password=<the real API key>), so no separate secret
+ * is needed.
+ */
+async function sendViaSendGridApi(config: ResolvedMailConfig, input: SendMailInput) {
+  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.password}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: input.to }] }],
+      from: { email: config.fromEmail, name: config.fromName },
+      subject: input.subject,
+      content: [
+        { type: "text/plain", value: input.text },
+        { type: "text/html", value: input.html },
+      ],
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(`SendGrid API error (${res.status}): ${body}`)
+  }
 }
 
 type SendMailInput = {
@@ -76,6 +116,11 @@ type SendMailInput = {
 
 export async function sendMail(input: SendMailInput) {
   const config = await resolveMailConfig()
+
+  if (config.host === "smtp.sendgrid.net" && config.password) {
+    return sendViaSendGridApi(config, input)
+  }
+
   const transporter = buildTransporter(config)
 
   const info = await transporter.sendMail({
