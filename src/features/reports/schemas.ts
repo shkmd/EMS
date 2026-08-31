@@ -16,3 +16,10 @@ export const assetReportQuerySchema = z.object({
   status: z.enum(assetStatusValues).optional(),
 })
 export type AssetReportQuery = z.infer<typeof assetReportQuerySchema>
+
+export const lateSummaryReportQuerySchema = z.object({
+  dateFrom: z.string().min(1, "Start date is required"),
+  dateTo: z.string().min(1, "End date is required"),
+  departmentId: z.string().optional(),
+})
+export type LateSummaryReportQuery = z.infer<typeof lateSummaryReportQuerySchema>

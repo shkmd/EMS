@@ -122,3 +122,41 @@ export async function buildAssetReportExcel(rows: AssetReportRow[]) {
 export function buildAssetReportCsv(rows: AssetReportRow[]) {
   return buildCsv(ASSET_COLUMNS, rows.map(toAssetRow))
 }
+
+type LateSummaryReportRow = {
+  employeeCode: string
+  firstName: string
+  lastName: string
+  department: string | null
+  daysPresent: number
+  daysLate: number
+  totalLateMinutes: number
+}
+
+const LATE_SUMMARY_COLUMNS = [
+  { header: "Employee Code", key: "employeeCode", width: 16 },
+  { header: "Name", key: "name", width: 24 },
+  { header: "Department", key: "department", width: 18 },
+  { header: "Days Present", key: "daysPresent", width: 14 },
+  { header: "Days Late", key: "daysLate", width: 12 },
+  { header: "Total Late Minutes", key: "totalLateMinutes", width: 18 },
+]
+
+function toLateSummaryRow(r: LateSummaryReportRow) {
+  return {
+    employeeCode: r.employeeCode,
+    name: `${r.firstName} ${r.lastName}`,
+    department: r.department ?? "—",
+    daysPresent: r.daysPresent,
+    daysLate: r.daysLate,
+    totalLateMinutes: r.totalLateMinutes,
+  }
+}
+
+export async function buildLateSummaryReportExcel(rows: LateSummaryReportRow[]) {
+  return buildExcel("Late Summary", LATE_SUMMARY_COLUMNS, rows.map(toLateSummaryRow))
+}
+
+export function buildLateSummaryReportCsv(rows: LateSummaryReportRow[]) {
+  return buildCsv(LATE_SUMMARY_COLUMNS, rows.map(toLateSummaryRow))
+}
