@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { forbidden } from "next/navigation";
 
 import { requireSession } from "@/features/auth/session";
-import { canManageEmployees, canViewEmployeeList } from "@/features/employees/authorization";
+import { canManageEmployees, canCreateEmployees, canViewEmployeeList } from "@/features/employees/authorization";
 import { listEmployees } from "@/features/employees/queries";
 import { employeeListQuerySchema } from "@/features/employees/schemas";
 import { EmployeesTable } from "@/features/employees/components/employees-table";
@@ -38,6 +38,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Se
         pagination={pagination}
         departments={departments}
         canManage={canManageEmployees(session.role)}
+        canCreate={canCreateEmployees(session.role)}
         query={{
           search: query.search ?? "",
           departmentId: query.departmentId ?? "",

@@ -4,9 +4,18 @@ import type { AccessTokenPayload } from "@/lib/jwt"
 
 export const EMPLOYEE_MANAGE_ROLES: Role[] = ["SUPER_ADMIN", "HR"]
 export const EMPLOYEE_VIEW_LIST_ROLES: Role[] = ["SUPER_ADMIN", "HR", "MANAGER"]
+// Deliberately broader than EMPLOYEE_MANAGE_ROLES, and only for the create
+// pathway: managers may add employees into their own department, but edit,
+// status changes, account access, deletion, notes, and documents on
+// existing employees stay HR/Admin-only (still gated by canManageEmployees).
+export const EMPLOYEE_CREATE_ROLES: Role[] = ["SUPER_ADMIN", "HR", "MANAGER"]
 
 export function canManageEmployees(role: Role) {
   return EMPLOYEE_MANAGE_ROLES.includes(role)
+}
+
+export function canCreateEmployees(role: Role) {
+  return EMPLOYEE_CREATE_ROLES.includes(role)
 }
 
 export function canViewEmployeeList(role: Role) {

@@ -12,7 +12,7 @@ import { getEnv } from "@/config/env"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { generateNextEmployeeCode } from "@/features/employees/lib/generate-employee-code"
 import { assertCanManageEmployees } from "@/features/employees/queries"
-import { canAccessEmployee } from "@/features/employees/authorization"
+import { canAccessEmployee, canCreateEmployees } from "@/features/employees/authorization"
 import type { EmployeeFormInput, EmployeeNoteInput, EmployeeStatusInput, AccountAccessInput } from "@/features/employees/schemas"
 import type { DocumentType } from "@prisma/client"
 
@@ -107,13 +107,23 @@ async function grantPortalAccess(
 }
 
 export async function createEmployee(input: EmployeeFormInput, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManageEmployees(viewer)
+  if (!canCreateEmployees(viewer.role)) throw new ForbiddenError()
+
+  // Managers may only add employees into their own department — enforced
+  // server-side (never trust the submitted departmentId for this), not just
+  // hidden in the UI. Editing an existing employee's department afterward
+  // still requires the broader canManageEmployees (HR/Admin) permission.
+  let departmentId = input.departmentId
+  if (viewer.role === "MANAGER") {
+    const manager = await prisma.employee.findUnique({ where: { id: viewer.employeeId ?? "__none__" }, select: { departmentId: true } })
+    departmentId = manager?.departmentId ?? undefined
+  }
 
   try {
     const employee = await prisma.$transaction(async (tx) => {
       const employeeCode = await generateNextEmployeeCode()
       const created = await tx.employee.create({
-        data: { employeeCode, ...toEmployeeData(input) },
+        data: { employeeCode, ...toEmployeeData({ ...input, departmentId }) },
       })
       await tx.employeeTimelineEvent.create({
         data: {

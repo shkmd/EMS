@@ -29,6 +29,9 @@ type EmployeeFormProps = {
    * (see features/recruitment) and onboarding is started automatically. */
   linkedCandidateId?: string
   defaultValues?: Partial<EmployeeFormInput>
+  /** Managers can only add employees into their own department — locks the
+   * Department field to whatever defaultValues.departmentId already is. */
+  lockDepartment?: boolean
   departments: Option[]
   designations: (Option & { departmentId: string | null })[]
   managers: Option[]
@@ -83,6 +86,7 @@ export function EmployeeForm({
   employeeId,
   linkedCandidateId,
   defaultValues,
+  lockDepartment,
   departments,
   designations,
   managers,
@@ -492,6 +496,7 @@ export function EmployeeForm({
                           field.onChange(v === NONE ? "" : v)
                           form.setValue("designationId", "")
                         }}
+                        disabled={lockDepartment}
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
@@ -507,6 +512,7 @@ export function EmployeeForm({
                           ))}
                         </SelectContent>
                       </Select>
+                      {lockDepartment && <p className="text-xs text-muted-foreground">You can only add employees to your own department.</p>}
                       <FormMessage />
                     </FormItem>
                   )}

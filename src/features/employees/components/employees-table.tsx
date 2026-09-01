@@ -37,6 +37,7 @@ type EmployeesTableProps = {
   pagination: PaginationMeta
   departments: { id: string; name: string }[]
   canManage: boolean
+  canCreate: boolean
   query: {
     search: string
     departmentId: string
@@ -46,7 +47,7 @@ type EmployeesTableProps = {
   }
 }
 
-export function EmployeesTable({ items, pagination, departments, canManage, query }: EmployeesTableProps) {
+export function EmployeesTable({ items, pagination, departments, canManage, canCreate, query }: EmployeesTableProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -180,7 +181,7 @@ export function EmployeesTable({ items, pagination, departments, canManage, quer
             </DropdownMenuContent>
           </DropdownMenu>
           {canManage && <GenerateOfferLetterDialog departments={departments} />}
-          {canManage && (
+          {canCreate && (
             <Button asChild>
               <Link href="/employees/new">
                 <Plus /> Add Employee
