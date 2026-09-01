@@ -12,7 +12,8 @@ import { getEnv } from "@/config/env"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { generateNextEmployeeCode } from "@/features/employees/lib/generate-employee-code"
 import { assertCanManageEmployees } from "@/features/employees/queries"
-import { canAccessEmployee, canCreateEmployees } from "@/features/employees/authorization"
+import { canAccessEmployee, canCreateEmployees, canDeleteEmployee } from "@/features/employees/authorization"
+import { getManagedVerticalIds } from "@/features/verticals/scope"
 import type { EmployeeFormInput, EmployeeNoteInput, EmployeeStatusInput, AccountAccessInput } from "@/features/employees/schemas"
 import type { DocumentType } from "@prisma/client"
 
@@ -109,21 +110,37 @@ async function grantPortalAccess(
 export async function createEmployee(input: EmployeeFormInput, viewer: AccessTokenPayload, meta: Meta) {
   if (!canCreateEmployees(viewer.role)) throw new ForbiddenError()
 
-  // Managers may only add employees into their own department — enforced
-  // server-side (never trust the submitted departmentId for this), not just
+  // Managers may only add employees into their own department, or — if they
+  // manage a vertical — anywhere within that vertical. Enforced server-side
+  // (never trust the submitted departmentId/verticalId for this), not just
   // hidden in the UI. Editing an existing employee's department afterward
   // still requires the broader canManageEmployees (HR/Admin) permission.
   let departmentId = input.departmentId
+  let verticalId = input.verticalId
   if (viewer.role === "MANAGER") {
-    const manager = await prisma.employee.findUnique({ where: { id: viewer.employeeId ?? "__none__" }, select: { departmentId: true } })
-    departmentId = manager?.departmentId ?? undefined
+    const managedVerticalIds = await getManagedVerticalIds(viewer)
+
+    if (managedVerticalIds.length > 0) {
+      verticalId = managedVerticalIds.includes(verticalId ?? "") ? verticalId : managedVerticalIds[0]
+
+      const validDepartments = await prisma.employee.findMany({
+        where: { verticalId, departmentId: { not: null }, deletedAt: null },
+        select: { departmentId: true },
+        distinct: ["departmentId"],
+      })
+      const validDepartmentIds = new Set(validDepartments.map((d) => d.departmentId))
+      departmentId = departmentId && validDepartmentIds.has(departmentId) ? departmentId : undefined
+    } else {
+      const manager = await prisma.employee.findUnique({ where: { id: viewer.employeeId ?? "__none__" }, select: { departmentId: true } })
+      departmentId = manager?.departmentId ?? undefined
+    }
   }
 
   try {
     const employee = await prisma.$transaction(async (tx) => {
       const employeeCode = await generateNextEmployeeCode()
       const created = await tx.employee.create({
-        data: { employeeCode, ...toEmployeeData({ ...input, departmentId }) },
+        data: { employeeCode, ...toEmployeeData({ ...input, departmentId, verticalId }) },
       })
       await tx.employeeTimelineEvent.create({
         data: {
@@ -320,10 +337,11 @@ export async function updateEmployeeAccountAccess(
 }
 
 export async function softDeleteEmployee(id: string, viewer: AccessTokenPayload, meta: Meta) {
-  assertCanManageEmployees(viewer)
-
   const existing = await prisma.employee.findUnique({ where: { id, deletedAt: null } })
   if (!existing) throw new NotFoundError("Employee not found")
+
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  if (!canDeleteEmployee(viewer, existing, managedVerticalIds)) throw new ForbiddenError()
 
   await prisma.$transaction(async (tx) => {
     await tx.employee.update({ where: { id }, data: { deletedAt: new Date(), status: "TERMINATED" } })

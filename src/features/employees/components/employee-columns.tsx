@@ -27,6 +27,9 @@ export type EmployeeRow = {
   dateOfJoining: Date | string
   department: { id: string; name: string } | null
   designation: { id: string; title: string } | null
+  /** Vertical managers may delete employees within their managed vertical
+   * even without the broader canManage (edit/status/etc.) permission. */
+  canDelete?: boolean
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -141,47 +144,57 @@ export function getEmployeeColumns({
     },
   ]
 
-  if (canManage) {
-    columns.push({
-      id: "actions",
-      cell: ({ row }) => {
-        const employee = row.original
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm">
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href={`/employees/${employee.id}`}>
-                  <Eye /> View
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={`/employees/${employee.id}/edit`}>
-                  <Pencil /> Edit
-                </Link>
-              </DropdownMenuItem>
-              {employee.status === "ACTIVE" ? (
-                <DropdownMenuItem onClick={() => onStatusChange(employee, "INACTIVE")}>
-                  <UserX /> Deactivate
+  // Always add the column — visibility is per-row (see canDeleteRow below),
+  // since a vertical manager may delete some rows without having the
+  // broader canManage permission at all.
+  columns.push({
+    id: "actions",
+    cell: ({ row }) => {
+      const employee = row.original
+      const canDeleteRow = canManage || !!employee.canDelete
+      if (!canDeleteRow) return null
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm">
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canManage && (
+              <>
+                <DropdownMenuItem asChild>
+                  <Link href={`/employees/${employee.id}`}>
+                    <Eye /> View
+                  </Link>
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => onStatusChange(employee, "ACTIVE")}>
-                  <UserCheck /> Activate
+                <DropdownMenuItem asChild>
+                  <Link href={`/employees/${employee.id}/edit`}>
+                    <Pencil /> Edit
+                  </Link>
                 </DropdownMenuItem>
-              )}
+                {employee.status === "ACTIVE" ? (
+                  <DropdownMenuItem onClick={() => onStatusChange(employee, "INACTIVE")}>
+                    <UserX /> Deactivate
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => onStatusChange(employee, "ACTIVE")}>
+                    <UserCheck /> Activate
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+            {canDeleteRow && (
               <DropdownMenuItem variant="destructive" onClick={() => onDelete(employee)}>
                 <Trash2 /> Delete
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-    })
-  }
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    },
+  })
 
   return columns
 }

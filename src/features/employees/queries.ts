@@ -7,7 +7,7 @@ import { buildPaginationMeta } from "@/lib/api-response"
 import { ForbiddenError, NotFoundError } from "@/lib/errors"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import type { EmployeeListQuery } from "@/features/employees/schemas"
-import { canAccessEmployee, canManageEmployees } from "@/features/employees/authorization"
+import { canAccessEmployee, canManageEmployees, canDeleteEmployee } from "@/features/employees/authorization"
 import { getManagedVerticalIds } from "@/features/verticals/scope"
 
 const employeeListSelect = {
@@ -21,14 +21,14 @@ const employeeListSelect = {
   employmentType: true,
   status: true,
   dateOfJoining: true,
+  verticalId: true,
   department: { select: { id: true, name: true } },
   designation: { select: { id: true, title: true } },
 } satisfies Prisma.EmployeeSelect
 
 /** MANAGER sees their direct reports plus anyone in a vertical they manage. */
-async function managerScope(viewer: AccessTokenPayload): Promise<Prisma.EmployeeWhereInput | undefined> {
+function managerScope(viewer: AccessTokenPayload, managedVerticalIds: string[]): Prisma.EmployeeWhereInput | undefined {
   if (viewer.role !== "MANAGER") return undefined
-  const managedVerticalIds = await getManagedVerticalIds(viewer)
   return {
     OR: [{ reportingManagerId: viewer.employeeId }, ...(managedVerticalIds.length > 0 ? [{ verticalId: { in: managedVerticalIds } }] : [])],
   }
@@ -37,7 +37,8 @@ async function managerScope(viewer: AccessTokenPayload): Promise<Prisma.Employee
 export async function listEmployees(query: EmployeeListQuery, viewer: AccessTokenPayload) {
   const conditions: Prisma.EmployeeWhereInput[] = [{ deletedAt: null }]
 
-  const scope = await managerScope(viewer)
+  const managedVerticalIds = await getManagedVerticalIds(viewer)
+  const scope = managerScope(viewer, managedVerticalIds)
   if (scope) conditions.push(scope)
 
   if (query.departmentId) conditions.push({ departmentId: query.departmentId })
@@ -82,14 +83,16 @@ export async function listEmployees(query: EmployeeListQuery, viewer: AccessToke
     prisma.employee.count({ where }),
   ])
 
-  return { items, pagination: buildPaginationMeta(query.page, query.pageSize, total) }
+  const itemsWithDelete = items.map((item) => ({ ...item, canDelete: canDeleteEmployee(viewer, item, managedVerticalIds) }))
+
+  return { items: itemsWithDelete, pagination: buildPaginationMeta(query.page, query.pageSize, total) }
 }
 
 /** Same filters as listEmployees, without pagination — used by export. */
 export async function listAllEmployeesForExport(query: Omit<EmployeeListQuery, "page" | "pageSize">, viewer: AccessTokenPayload) {
   const conditions: Prisma.EmployeeWhereInput[] = [{ deletedAt: null }]
 
-  const scope = await managerScope(viewer)
+  const scope = managerScope(viewer, await getManagedVerticalIds(viewer))
   if (scope) conditions.push(scope)
 
   if (query.departmentId) conditions.push({ departmentId: query.departmentId })
