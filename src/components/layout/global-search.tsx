@@ -38,9 +38,22 @@ export function GlobalSearch({ role }: { role: Role }) {
 
   return (
     <>
+      {/* Icon-only below sm — the full pill with visible "Search..." text
+          doesn't fit next to the breadcrumb and topbar icons on a phone
+          width, and was forcing the whole header (and page) to scroll
+          horizontally. */}
       <Button
         variant="outline"
-        className="w-full max-w-sm justify-start gap-2 rounded-full border-transparent bg-muted text-muted-foreground hover:bg-muted sm:w-64"
+        size="icon"
+        className="shrink-0 rounded-full border-transparent bg-muted text-muted-foreground hover:bg-muted sm:hidden"
+        onClick={() => setOpen(true)}
+      >
+        <Search className="size-4" />
+        <span className="sr-only">Search</span>
+      </Button>
+      <Button
+        variant="outline"
+        className="hidden shrink-0 justify-start gap-2 rounded-full border-transparent bg-muted text-muted-foreground hover:bg-muted sm:flex sm:w-64"
         onClick={() => setOpen(true)}
       >
         <Search className="size-4" />

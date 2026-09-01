@@ -16,11 +16,15 @@ type TopbarProps = {
 
 export function Topbar({ name, email, role, avatarUrl }: TopbarProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+    <header className="flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b bg-background px-4">
       <SidebarTrigger />
-      <Separator orientation="vertical" className="h-5" />
-      <PageBreadcrumb />
-      <div className="ml-auto flex items-center gap-2">
+      <Separator orientation="vertical" className="h-5 shrink-0" />
+      {/* min-w-0 lets this shrink/truncate instead of forcing the header
+          (and page) to overflow horizontally on a long breadcrumb chain. */}
+      <div className="min-w-0 overflow-hidden">
+        <PageBreadcrumb />
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         <GlobalSearch role={role} />
         <NotificationsMenu />
         <ThemeToggle />
