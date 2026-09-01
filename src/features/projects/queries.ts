@@ -63,6 +63,7 @@ export async function listProjects(viewer: AccessTokenPayload, includeArchived =
       name: p.name,
       description: p.description,
       color: p.color,
+      verticalId: p.verticalId,
       status: p.status,
       taskCount: p._count.tasks,
       doneCount,
@@ -70,6 +71,17 @@ export async function listProjects(viewer: AccessTokenPayload, includeArchived =
       updatedAt: p.updatedAt,
     }
   })
+}
+
+/** Verticals the viewer may assign to a project: all of them for HR/SUPER_ADMIN,
+ * otherwise only their own vertical plus any they manage. */
+export async function listAssignableVerticals(viewer: AccessTokenPayload) {
+  const [visibleVerticalIds, verticals] = await Promise.all([
+    getVisibleVerticalIds(viewer),
+    prisma.vertical.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ])
+  if (visibleVerticalIds === null) return verticals
+  return verticals.filter((v) => visibleVerticalIds.includes(v.id))
 }
 
 export async function getProject(id: string, viewer: AccessTokenPayload) {

@@ -26,9 +26,11 @@ import type { ProjectSummary } from "@/features/projects/lib/types"
 export function ProjectsGrid({
   initialProjects,
   canManage,
+  verticals,
 }: {
   initialProjects: ProjectSummary[]
   canManage: boolean
+  verticals: { id: string; name: string }[]
 }) {
   const [projects, setProjects] = useState(initialProjects)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -144,7 +146,13 @@ export function ProjectsGrid({
         </div>
       )}
 
-      <ProjectFormDialog target={editTarget} open={dialogOpen} onOpenChange={setDialogOpen} onSaved={refresh} />
+      <ProjectFormDialog
+        target={editTarget}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSaved={refresh}
+        verticals={verticals}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

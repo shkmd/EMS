@@ -9,6 +9,7 @@ export type ProjectSummary = {
   name: string
   description: string | null
   color: string
+  verticalId: string | null
   status: string
   taskCount: number
   doneCount: number

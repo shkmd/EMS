@@ -101,10 +101,7 @@ async function notifyTaskParticipants(
 
 export async function createProject(input: ProjectFormInput, viewer: AccessTokenPayload, meta: Meta) {
   assertCanManage(viewer)
-
-  const creator = viewer.employeeId
-    ? await prisma.employee.findUnique({ where: { id: viewer.employeeId }, select: { verticalId: true } })
-    : null
+  await assertVerticalVisible(viewer, input.verticalId)
 
   const project = await prisma.project.create({
     data: {
@@ -112,7 +109,7 @@ export async function createProject(input: ProjectFormInput, viewer: AccessToken
       description: input.description || null,
       color: input.color,
       createdById: viewer.sub,
-      verticalId: creator?.verticalId ?? null,
+      verticalId: input.verticalId,
     },
   })
 
@@ -124,10 +121,11 @@ export async function updateProject(id: string, input: ProjectFormInput, viewer:
   const existing = await prisma.project.findUnique({ where: { id } })
   if (!existing) throw new NotFoundError("Project not found")
   await assertCanManageProject(viewer, existing.verticalId)
+  await assertVerticalVisible(viewer, input.verticalId)
 
   const project = await prisma.project.update({
     where: { id },
-    data: { name: input.name, description: input.description || null, color: input.color },
+    data: { name: input.name, description: input.description || null, color: input.color, verticalId: input.verticalId },
   })
 
   await recordAuditLog({ userId: viewer.sub, action: "PROJECT_UPDATED", entityType: "Project", entityId: id, ...meta })

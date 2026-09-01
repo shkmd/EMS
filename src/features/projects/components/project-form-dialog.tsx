@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-client"
 import { projectFormSchema, type ProjectFormInput } from "@/features/projects/schemas"
@@ -35,25 +36,33 @@ const COLOR_OPTIONS = [
   "#8b5cf6",
 ]
 
-export type ProjectEditTarget = { id: string; name: string; description: string | null; color: string } | null
+export type ProjectEditTarget = {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  verticalId: string | null
+} | null
 
 export function ProjectFormDialog({
   target,
   open,
   onOpenChange,
   onSaved,
+  verticals,
 }: {
   target: ProjectEditTarget
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+  verticals: { id: string; name: string }[]
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isEdit = !!target
 
   const form = useForm<ProjectFormInput>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { name: "", description: "", color: COLOR_OPTIONS[0] },
+    defaultValues: { name: "", description: "", color: COLOR_OPTIONS[0], verticalId: "" },
   })
 
   useEffect(() => {
@@ -62,9 +71,10 @@ export function ProjectFormDialog({
         name: target?.name ?? "",
         description: target?.description ?? "",
         color: target?.color ?? COLOR_OPTIONS[0],
+        verticalId: target?.verticalId ?? (verticals.length === 1 ? verticals[0]!.id : ""),
       })
     }
-  }, [open, target, form])
+  }, [open, target, verticals, form])
 
   async function onSubmit(values: ProjectFormInput) {
     setIsSubmitting(true)
@@ -124,6 +134,30 @@ export function ProjectFormDialog({
             />
             <FormField
               control={form.control}
+              name="verticalId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vertical</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select vertical" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {verticals.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="color"
               render={({ field }) => (
                 <FormItem>
@@ -149,11 +183,17 @@ export function ProjectFormDialog({
                 </FormItem>
               )}
             />
+            {verticals.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                You aren&apos;t assigned to a vertical, so there&apos;s nothing to assign this project to yet. Ask an
+                admin to set your vertical first.
+              </p>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || verticals.length === 0}>
                 {isSubmitting && <Loader2 className="animate-spin" />}
                 {isEdit ? "Save changes" : "Create project"}
               </Button>

@@ -6,6 +6,7 @@ export const projectFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   description: z.string().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color"),
+  verticalId: z.string().min(1, "Vertical is required"),
 })
 export type ProjectFormInput = z.infer<typeof projectFormSchema>
 
