@@ -21,6 +21,7 @@ import {
   getPushSubscriptionState,
   enablePushNotifications,
   disablePushNotifications,
+  needsHomeScreenInstallForIOSPush,
 } from "@/lib/push-client"
 
 type NotificationItem = {
@@ -39,9 +40,11 @@ export function NotificationsMenu() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [pushState, setPushState] = useState<"unsupported" | "denied" | "subscribed" | "unsubscribed">("unsupported")
   const [pushBusy, setPushBusy] = useState(false)
+  const [needsIOSInstall, setNeedsIOSInstall] = useState(false)
 
   useEffect(() => {
     if (isPushSupported()) getPushSubscriptionState().then(setPushState)
+    else setNeedsIOSInstall(needsHomeScreenInstallForIOSPush())
   }, [])
 
   async function handleTogglePush() {
@@ -167,6 +170,12 @@ export function NotificationsMenu() {
             {pushBusy ? <Loader2 className="animate-spin" /> : <BellPlus />}
             {pushState === "subscribed" ? "Turn off notifications on this device" : "Enable notifications on this device"}
           </Button>
+        )}
+        {pushState === "unsupported" && needsIOSInstall && (
+          <p className="px-2 py-1.5 text-center text-xs text-muted-foreground">
+            On iPhone, add this app to your Home Screen first (Share → Add to Home Screen), then open it from there to
+            enable notifications.
+          </p>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

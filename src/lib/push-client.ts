@@ -13,6 +13,18 @@ export function isPushSupported() {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window
 }
 
+/** iOS Safari only exposes PushManager once the site is running as an
+ * installed ("standalone") app — never in a regular browser tab, even on
+ * versions that otherwise support web push. Lets the UI explain *why*
+ * notifications aren't available yet instead of just hiding the option. */
+export function needsHomeScreenInstallForIOSPush() {
+  if (typeof window === "undefined" || isPushSupported()) return false
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true
+  return isIOS && !isStandalone
+}
+
 export async function getPushSubscriptionState(): Promise<"unsupported" | "denied" | "subscribed" | "unsubscribed"> {
   if (!isPushSupported()) return "unsupported"
   if (Notification.permission === "denied") return "denied"
