@@ -1,9 +1,0 @@
-{
-  "name": "EMS | Employee Management System",
-  "short_name": "EMS",
-  "start_url": "/dashboard",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#111827",
-  "icons": [{ "src": "/api/settings/logo", "sizes": "any", "type": "image/png" }]
-}

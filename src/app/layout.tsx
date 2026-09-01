@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Roboto, Poppins, Open_Sans, Lato, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { getCompanySettings } from "@/features/settings/queries";
 import { foregroundForHex } from "@/lib/color";
 
@@ -34,8 +35,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EMS | Employee Management System",
   description: "Modern HR management system — employees, attendance, leave, payroll and more.",
-  manifest: "/manifest.json",
+  // The manifest link itself is auto-injected from app/manifest.ts (served
+  // at /manifest.webmanifest) — no manual `manifest:` field needed here.
+  appleWebApp: {
+    // iOS ignores the web manifest's `display: "standalone"` — this is the
+    // separate flag that makes "Add to Home Screen" open without Safari's
+    // browser chrome there.
+    capable: true,
+    statusBarStyle: "default",
+    title: "EMS",
+  },
 };
+
+// getCompanySettings() is cached per-request (see features/settings/queries),
+// so this, generateViewport, and app/manifest.ts share one query per
+// navigation rather than three.
+export async function generateViewport(): Promise<Viewport> {
+  const settings = await getCompanySettings();
+  const themeColor = settings.primaryColor && /^#[0-9a-fA-F]{6}$/.test(settings.primaryColor) ? settings.primaryColor : "#111827";
+  return { themeColor, width: "device-width", initialScale: 1 };
+}
 
 // The root layout now reads CompanySettings on every render so branding
 // changes apply without a redeploy. That DB call can't run during `next
@@ -68,6 +87,7 @@ export default async function RootLayout({
         </head>
       )}
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <PwaServiceWorker />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -1,5 +1,7 @@
 import "server-only"
 
+import { cache } from "react"
+
 import { prisma } from "@/lib/prisma"
 
 const DEFAULT_COMPANY_SETTINGS = {
@@ -18,10 +20,13 @@ const DEFAULT_COMPANY_SETTINGS = {
   dateFormat: "dd MMM yyyy",
 }
 
-export async function getCompanySettings() {
+// Cached per-request: the root layout, generateViewport, and the PWA
+// manifest route all read this on every navigation — dedupes those into a
+// single query instead of three.
+export const getCompanySettings = cache(async () => {
   const settings = await prisma.companySettings.findUnique({ where: { id: 1 } })
   return settings ?? { id: 1, updatedAt: new Date(), ...DEFAULT_COMPANY_SETTINGS }
-}
+})
 
 const DEFAULT_WORKING_HOURS_SETTINGS = {
   startTime: "09:00",

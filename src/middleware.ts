@@ -6,6 +6,13 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/features/auth/const
 // Paths reachable without a session. Everything else requires a valid
 // access token cookie.
 const PUBLIC_PAGE_PATHS = ["/login", "/forgot-password", "/reset-password"]
+// Root-level PWA assets: none carry sensitive data (the manifest only
+// exposes company name/color/logo, already shown on the public login page),
+// and all three need to load *before* a session exists — a browser reads
+// the manifest and registers the service worker on first visit, and the
+// service worker itself must serve the offline fallback when there's no
+// network (and thus no way to silently refresh an expired session either).
+const PUBLIC_STATIC_PATHS = ["/sw.js", "/offline.html", "/manifest.webmanifest"]
 const PUBLIC_API_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
@@ -26,6 +33,7 @@ function isPublicPath(pathname: string) {
   if (pathname === "/") return true
   if (PUBLIC_PAGE_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true
   if (PUBLIC_API_PATHS.some((p) => pathname === p)) return true
+  if (PUBLIC_STATIC_PATHS.some((p) => pathname === p)) return true
   return false
 }
 
