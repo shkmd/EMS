@@ -58,7 +58,7 @@ function withCookieValue(originalHeader: string | null, name: string, value: str
   return parts.join("; ")
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
   const isApiRoute = pathname.startsWith("/api")
 
