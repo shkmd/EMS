@@ -11,5 +11,6 @@ export const verticalFormSchema = z.object({
   halfDayHours: z.string().min(1, "Half-day hours is required"),
   fullDayHours: z.string().min(1, "Full-day hours is required"),
   managerIds: z.array(z.string()),
+  officeIpAllowlist: z.string().optional(),
 })
 export type VerticalFormInput = z.infer<typeof verticalFormSchema>

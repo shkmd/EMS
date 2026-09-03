@@ -45,6 +45,7 @@ function toEmployeeData(input: EmployeeFormInput) {
     verticalId: orNull(input.verticalId),
     reportingManagerId: orNull(input.reportingManagerId),
     employmentType: input.employmentType,
+    workMode: input.workMode,
     dateOfJoining: new Date(input.dateOfJoining),
     probationPeriodMonths: orNullNumber(input.probationPeriodMonths),
     confirmationDate: input.confirmationDate ? new Date(input.confirmationDate) : null,

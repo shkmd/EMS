@@ -60,6 +60,7 @@ const TAB_FIELDS: Record<(typeof TAB_ORDER)[number], (keyof EmployeeFormInput)[]
     "verticalId",
     "reportingManagerId",
     "employmentType",
+    "workMode",
     "dateOfJoining",
     "probationPeriodMonths",
     "confirmationDate",
@@ -77,6 +78,7 @@ const emptyDefaults: EmployeeFormInput = {
   mobile: "",
   email: "",
   employmentType: "FULL_TIME",
+  workMode: "OFFICE",
   dateOfJoining: "",
   status: "ACTIVE",
 }
@@ -610,6 +612,28 @@ export function EmployeeForm({
                           <SelectItem value="PART_TIME">Part-time</SelectItem>
                           <SelectItem value="CONTRACT">Contract</SelectItem>
                           <SelectItem value="INTERN">Intern</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="workMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Work mode</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="OFFICE">Office</SelectItem>
+                          <SelectItem value="REMOTE">Remote</SelectItem>
+                          <SelectItem value="HYBRID">Hybrid</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

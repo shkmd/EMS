@@ -9,6 +9,7 @@ import { ValidationError, ForbiddenError, NotFoundError } from "@/lib/errors"
 import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageAttendance } from "@/features/attendance/authorization"
+import { isIpAllowed } from "@/features/attendance/lib/ip-allowlist"
 import { getWorkingHoursForEmployee } from "@/features/verticals/queries"
 import { getCompanySettings } from "@/features/settings/queries"
 import { zonedTimeToUtc } from "@/lib/timezone"
@@ -70,8 +71,23 @@ async function findOrCreateTodayAttendance(employeeId: string, status: "PRESENT"
   })
 }
 
+async function assertCheckInAllowedFromIp(employeeId: string, ipAddress: string | null | undefined) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { workMode: true, vertical: { select: { officeIpAllowlist: true } } },
+  })
+
+  if (employee?.workMode === "OFFICE" && !isIpAllowed(ipAddress, employee.vertical?.officeIpAllowlist)) {
+    throw new ValidationError(
+      "You must be connected to the office network to check in. If you work from home, ask HR to update your work mode."
+    )
+  }
+}
+
 export async function checkIn(viewer: AccessTokenPayload, asWorkFromHome: boolean, meta: Meta) {
   const employeeId = requireSelfEmployeeId(viewer)
+  await assertCheckInAllowedFromIp(employeeId, meta.ipAddress)
+
   const attendance = await findOrCreateTodayAttendance(employeeId, asWorkFromHome ? "WORK_FROM_HOME" : "PRESENT")
 
   if (attendance.checkIn) {

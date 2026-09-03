@@ -37,6 +37,7 @@ type Vertical = {
   graceMinutes: number
   halfDayHours: number
   fullDayHours: number
+  officeIpAllowlist: string | null
   managers: { id: string; firstName: string; lastName: string }[]
   _count: { employees: number }
 }

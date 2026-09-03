@@ -14,6 +14,7 @@ export async function listVerticals() {
       graceMinutes: true,
       halfDayHours: true,
       fullDayHours: true,
+      officeIpAllowlist: true,
       createdAt: true,
       managers: { select: { id: true, firstName: true, lastName: true } },
       _count: { select: { employees: { where: { deletedAt: null } } } },

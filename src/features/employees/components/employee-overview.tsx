@@ -34,6 +34,7 @@ export type EmployeeOverviewData = {
   designation: { title: string } | null
   reportingManager: { firstName: string; lastName: string } | null
   employmentType: string
+  workMode: string
   dateOfJoining: Date | string
   probationPeriodMonths: number | null
   confirmationDate: Date | string | null
@@ -107,6 +108,7 @@ export function EmployeeOverview({ employee }: { employee: EmployeeOverviewData 
             value={employee.reportingManager && `${employee.reportingManager.firstName} ${employee.reportingManager.lastName}`}
           />
           <Field label="Employment type" value={employee.employmentType.replace("_", " ")} />
+          <Field label="Work mode" value={employee.workMode} />
           <Field label="Date of joining" value={dateStr(employee.dateOfJoining)} />
           <Field label="Probation period" value={employee.probationPeriodMonths ? `${employee.probationPeriodMonths} months` : null} />
           <Field label="Confirmation date" value={dateStr(employee.confirmationDate)} />

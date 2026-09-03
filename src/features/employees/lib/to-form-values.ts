@@ -24,6 +24,7 @@ type EmployeeRecord = {
   verticalId: string | null
   reportingManagerId: string | null
   employmentType: string
+  workMode: string
   dateOfJoining: Date
   probationPeriodMonths: number | null
   confirmationDate: Date | null
@@ -72,6 +73,7 @@ export function employeeToFormValues(employee: EmployeeRecord): EmployeeFormInpu
     verticalId: employee.verticalId ?? "",
     reportingManagerId: employee.reportingManagerId ?? "",
     employmentType: employee.employmentType as EmployeeFormInput["employmentType"],
+    workMode: employee.workMode as EmployeeFormInput["workMode"],
     dateOfJoining: dateInput(employee.dateOfJoining),
     probationPeriodMonths: employee.probationPeriodMonths?.toString() ?? "",
     confirmationDate: dateInput(employee.confirmationDate),

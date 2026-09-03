@@ -24,6 +24,7 @@ function toVerticalData(input: VerticalFormInput) {
     graceMinutes: Number(input.graceMinutes),
     halfDayHours: Number(input.halfDayHours),
     fullDayHours: Number(input.fullDayHours),
+    officeIpAllowlist: input.officeIpAllowlist?.trim() || null,
   }
 }
 

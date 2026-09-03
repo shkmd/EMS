@@ -52,6 +52,7 @@ export const employeeFormSchema = z.object({
   verticalId: optionalString,
   reportingManagerId: optionalString,
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"]),
+  workMode: z.enum(["OFFICE", "REMOTE", "HYBRID"]),
   dateOfJoining: z.string().min(1, "Date of joining is required"),
   probationPeriodMonths: optionalNumericString("Probation period"),
   confirmationDate: optionalString,

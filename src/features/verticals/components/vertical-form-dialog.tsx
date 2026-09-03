@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -37,6 +38,7 @@ export type VerticalEditTarget = {
   graceMinutes: number
   halfDayHours: number
   fullDayHours: number
+  officeIpAllowlist: string | null
   managers: { id: string; firstName: string; lastName: string }[]
 } | null
 
@@ -66,6 +68,7 @@ export function VerticalFormDialog({
       halfDayHours: "4",
       fullDayHours: "8",
       managerIds: [],
+      officeIpAllowlist: "",
     },
   })
 
@@ -88,6 +91,7 @@ export function VerticalFormDialog({
         halfDayHours: target ? String(target.halfDayHours) : "4",
         fullDayHours: target ? String(target.fullDayHours) : "8",
         managerIds: target?.managers.map((m) => m.id) ?? [],
+        officeIpAllowlist: target?.officeIpAllowlist ?? "",
       })
     }
   }, [open, target, form])
@@ -240,6 +244,28 @@ export function VerticalFormDialog({
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="officeIpAllowlist"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Office IP allowlist</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={2}
+                      placeholder="203.0.113.10, 198.51.100.0/24"
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Comma or newline-separated exact IPs and/or CIDR ranges. Employees in this vertical whose work
+                    mode is Office can only check in from one of these — leave blank to not restrict check-in for
+                    this vertical.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel

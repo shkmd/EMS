@@ -53,6 +53,12 @@ enum EmploymentType {
   INTERN
 }
 
+enum WorkMode {
+  OFFICE
+  REMOTE
+  HYBRID
+}
+
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
@@ -420,8 +426,8 @@ model Designation {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  employees  Employee[]
+  department  Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees   Employee[]
   jobOpenings JobOpening[]
 
   @@unique([title, departmentId])
@@ -469,6 +475,7 @@ model Employee {
   verticalId            String?
   reportingManagerId    String?
   employmentType        EmploymentType @default(FULL_TIME)
+  workMode              WorkMode       @default(OFFICE)
   dateOfJoining         DateTime       @db.Date
   probationPeriodMonths Int?
   confirmationDate      DateTime?      @db.Date
@@ -509,37 +516,37 @@ model Employee {
   subordinates     Employee[]   @relation("ManagerSubordinates")
   departmentHeadOf Department?  @relation("DepartmentHead")
 
-  documents              EmployeeDocument[]
-  notes                  EmployeeNote[]
-  timelineEvents         EmployeeTimelineEvent[]
-  offboardings           Offboarding[]
-  onboardings            Onboarding[]
-  attendances            Attendance[]
-  screenActivities       ScreenActivity[]
-  dailyLogs              DailyLog[]
-  leaveRequestsMade      LeaveRequest[]          @relation("LeaveApplicant")
-  leaveRequestsManaged   LeaveRequest[]          @relation("LeaveManagerApprover")
-  leaveRequestsHrManaged LeaveRequest[]          @relation("LeaveHrApprover")
-  leaveBalances          LeaveBalance[]
-  expenseClaimsMade      ExpenseClaim[]          @relation("ExpenseApplicant")
-  expenseClaimsManaged   ExpenseClaim[]          @relation("ExpenseManagerApprover")
-  expenseClaimsHrManaged ExpenseClaim[]          @relation("ExpenseHrApprover")
-  payslips               Payslip[]
-  goals                  PerformanceGoal[]
-  kpis                   KPI[]
-  performanceReviews     PerformanceReview[]     @relation("RevieweeEmployee")
-  assetAssignments       AssetAssignment[]
-  notifications          Notification[]
-  taskAssignments        TaskAssignee[]
-  subscriptionsToNotify  Subscription[]
-  hiredFromCandidate     Candidate?              @relation("CandidateHiredEmployee")
-  interviewPanelist      InterviewPanelist[]
-  courseEnrollments      CourseEnrollment[]
-  skills                 EmployeeSkill[]
-  policyAcknowledgments  PolicyAcknowledgment[]
+  documents               EmployeeDocument[]
+  notes                   EmployeeNote[]
+  timelineEvents          EmployeeTimelineEvent[]
+  offboardings            Offboarding[]
+  onboardings             Onboarding[]
+  attendances             Attendance[]
+  screenActivities        ScreenActivity[]
+  dailyLogs               DailyLog[]
+  leaveRequestsMade       LeaveRequest[]          @relation("LeaveApplicant")
+  leaveRequestsManaged    LeaveRequest[]          @relation("LeaveManagerApprover")
+  leaveRequestsHrManaged  LeaveRequest[]          @relation("LeaveHrApprover")
+  leaveBalances           LeaveBalance[]
+  expenseClaimsMade       ExpenseClaim[]          @relation("ExpenseApplicant")
+  expenseClaimsManaged    ExpenseClaim[]          @relation("ExpenseManagerApprover")
+  expenseClaimsHrManaged  ExpenseClaim[]          @relation("ExpenseHrApprover")
+  payslips                Payslip[]
+  goals                   PerformanceGoal[]
+  kpis                    KPI[]
+  performanceReviews      PerformanceReview[]     @relation("RevieweeEmployee")
+  assetAssignments        AssetAssignment[]
+  notifications           Notification[]
+  taskAssignments         TaskAssignee[]
+  subscriptionsToNotify   Subscription[]
+  hiredFromCandidate      Candidate?              @relation("CandidateHiredEmployee")
+  interviewPanelist       InterviewPanelist[]
+  courseEnrollments       CourseEnrollment[]
+  skills                  EmployeeSkill[]
+  policyAcknowledgments   PolicyAcknowledgment[]
   poshCommitteeMembership PoshCommitteeMember?
-  poshCasesFiled         PoshCase[]              @relation("PoshComplainant")
-  poshCasesAsRespondent  PoshCase[]              @relation("PoshRespondent")
+  poshCasesFiled          PoshCase[]              @relation("PoshComplainant")
+  poshCasesAsRespondent   PoshCase[]              @relation("PoshRespondent")
 
   @@index([departmentId])
   @@index([designationId])
@@ -1356,19 +1363,23 @@ model CompanySettings {
 // Each carries its own working-hours configuration; employees not assigned
 // to one fall back to the global WorkingHoursSettings singleton below.
 model Vertical {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  startTime    String   @default("09:00")
-  endTime      String   @default("18:00")
-  workingDays  Json // e.g. ["MON","TUE","WED","THU","FRI"]
-  graceMinutes Int      @default(10)
-  halfDayHours Decimal  @default(4) @db.Decimal(4, 2)
-  fullDayHours Decimal  @default(8) @db.Decimal(4, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String   @unique
+  startTime         String   @default("09:00")
+  endTime           String   @default("18:00")
+  workingDays       Json // e.g. ["MON","TUE","WED","THU","FRI"]
+  graceMinutes      Int      @default(10)
+  halfDayHours      Decimal  @default(4) @db.Decimal(4, 2)
+  fullDayHours      Decimal  @default(8) @db.Decimal(4, 2)
+  // Comma/newline-separated list of exact IPs and/or IPv4 CIDR ranges
+  // allowed to check in as this vertical's OFFICE-mode employees. Null/empty
+  // means unrestricted (fail-open) until an admin configures it.
+  officeIpAllowlist String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   employees   Employee[]
-  managers    Employee[] @relation("VerticalManagers")
+  managers    Employee[]   @relation("VerticalManagers")
   projects    Project[]
   jobOpenings JobOpening[]
 
@@ -1507,12 +1518,12 @@ model InterviewPanelist {
 }
 
 model InterviewFeedback {
-  id             String                   @id @default(cuid())
-  panelistId     String                   @unique
+  id             String                  @id @default(cuid())
+  panelistId     String                  @unique
   rating         Int
   recommendation InterviewRecommendation
-  comments       String?                  @db.Text
-  submittedAt    DateTime                 @default(now())
+  comments       String?                 @db.Text
+  submittedAt    DateTime                @default(now())
 
   panelist InterviewPanelist @relation(fields: [panelistId], references: [id], onDelete: Cascade)
 
@@ -1524,24 +1535,24 @@ model InterviewFeedback {
 // ============================================================================
 
 model Course {
-  id             String   @id @default(cuid())
-  title          String
-  description    String?  @db.Text
-  category       String?
+  id              String   @id @default(cuid())
+  title           String
+  description     String?  @db.Text
+  category        String?
   durationMinutes Int?
-  contentUrl     String?
+  contentUrl      String?
   contentFileName String?
   // Completing this course (and passing its quiz, if any) upserts an
   // EmployeeSkill of this name at BEGINNER — the one link between the course
   // catalog and the skill matrix, kept intentionally simple (see
   // completeEnrollment in features/learning/mutations.ts).
-  skillGranted   String?
-  isPublished    Boolean  @default(false)
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  skillGranted    String?
+  isPublished     Boolean  @default(false)
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  createdBy   User              @relation("CourseCreatedBy", fields: [createdById], references: [id])
+  createdBy   User               @relation("CourseCreatedBy", fields: [createdById], references: [id])
   quiz        Quiz?
   enrollments CourseEnrollment[]
 
@@ -1577,18 +1588,18 @@ model QuizQuestion {
 }
 
 model CourseEnrollment {
-  id                 String           @id @default(cuid())
-  courseId           String
-  employeeId         String
-  status             EnrollmentStatus @default(ASSIGNED)
-  progressPercent    Int              @default(0)
-  quizScore          Int?
-  quizPassed         Boolean?
+  id                  String           @id @default(cuid())
+  courseId            String
+  employeeId          String
+  status              EnrollmentStatus @default(ASSIGNED)
+  progressPercent     Int              @default(0)
+  quizScore           Int?
+  quizPassed          Boolean?
   certificateIssuedAt DateTime?
-  assignedById       String
-  assignedAt         DateTime         @default(now())
-  startedAt          DateTime?
-  completedAt        DateTime?
+  assignedById        String
+  assignedAt          DateTime         @default(now())
+  startedAt           DateTime?
+  completedAt         DateTime?
 
   course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1601,14 +1612,14 @@ model CourseEnrollment {
 }
 
 model EmployeeSkill {
-  id                  String            @id @default(cuid())
+  id                  String           @id @default(cuid())
   employeeId          String
   name                String
-  proficiency         SkillProficiency  @default(BEGINNER)
-  notes               String?           @db.Text
+  proficiency         SkillProficiency @default(BEGINNER)
+  notes               String?          @db.Text
   certifiedByCourseId String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
@@ -1682,18 +1693,18 @@ model PoshCommitteeMember {
 }
 
 model PoshCase {
-  id                    String         @id @default(cuid())
-  caseNumber            String         @unique
-  complainantId         String
-  respondentName        String
-  respondentEmployeeId  String?
-  incidentDate          DateTime?      @db.Date
-  description           String         @db.Text
-  status                PoshCaseStatus @default(SUBMITTED)
-  outcome               String?        @db.Text
-  resolvedAt            DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  id                   String         @id @default(cuid())
+  caseNumber           String         @unique
+  complainantId        String
+  respondentName       String
+  respondentEmployeeId String?
+  incidentDate         DateTime?      @db.Date
+  description          String         @db.Text
+  status               PoshCaseStatus @default(SUBMITTED)
+  outcome              String?        @db.Text
+  resolvedAt           DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   complainant        Employee             @relation("PoshComplainant", fields: [complainantId], references: [id])
   respondentEmployee Employee?            @relation("PoshRespondent", fields: [respondentEmployeeId], references: [id], onDelete: SetNull)
@@ -1712,8 +1723,8 @@ model PoshCaseAssignment {
   committeeMemberId String
   assignedAt        DateTime @default(now())
 
-  case            PoshCase             @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  committeeMember PoshCommitteeMember  @relation(fields: [committeeMemberId], references: [id], onDelete: Cascade)
+  case            PoshCase            @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  committeeMember PoshCommitteeMember @relation(fields: [committeeMemberId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, committeeMemberId])
   @@index([committeeMemberId])
