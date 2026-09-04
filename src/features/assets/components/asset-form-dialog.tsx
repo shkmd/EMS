@@ -252,7 +252,7 @@ export function AssetFormDialog({
                   </Select>
                   {target?.status === "ASSIGNED" && (
                     <p className="text-xs text-muted-foreground">
-                      This asset is currently assigned — use &quot;Return&quot; from the inventory list to change its status.
+                      This asset is currently assigned — use &quot;Reassign&quot; or &quot;Return&quot; from the inventory list to change this.
                     </p>
                   )}
                   <FormMessage />

@@ -25,6 +25,14 @@ export const assignAssetSchema = z.object({
 })
 export type AssignAssetInput = z.infer<typeof assignAssetSchema>
 
+export const reassignAssetSchema = z.object({
+  employeeId: z.string().min(1, "Employee is required"),
+  issuedDate: z.string().min(1, "Date is required"),
+  condition: z.string().optional(),
+  remarks: z.string().optional(),
+})
+export type ReassignAssetInput = z.infer<typeof reassignAssetSchema>
+
 export const assignmentStatusValues = ["RETURNED", "LOST", "DAMAGED"] as const
 
 export const returnAssetSchema = z.object({

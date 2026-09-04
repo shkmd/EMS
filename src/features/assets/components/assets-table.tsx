@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Loader2, MoreHorizontal, Pencil, Search, Trash2, Undo2, UserPlus } from "lucide-react"
+import { Loader2, MoreHorizontal, Pencil, Search, Trash2, Undo2, UserCog, UserPlus } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,6 +29,7 @@ import {
 import { apiFetch } from "@/lib/api-client"
 import { AssetFormDialog, type AssetEditTarget } from "@/features/assets/components/asset-form-dialog"
 import { AssignAssetDialog } from "@/features/assets/components/assign-asset-dialog"
+import { ReassignAssetDialog } from "@/features/assets/components/reassign-asset-dialog"
 import { ReturnAssetDialog } from "@/features/assets/components/return-asset-dialog"
 import { ASSET_CATEGORY_LABELS, ASSET_STATUS_BADGE } from "@/features/assets/lib/labels"
 import { assetCategoryValues, assetStatusValues } from "@/features/assets/schemas"
@@ -58,6 +59,7 @@ export function AssetsTable() {
   const [editTarget, setEditTarget] = useState<AssetEditTarget>(null)
   const [assignTarget, setAssignTarget] = useState<string | null>(null)
   const [returnTarget, setReturnTarget] = useState<string | null>(null)
+  const [reassignTarget, setReassignTarget] = useState<{ assignmentId: string; employeeName: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AssetRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -195,6 +197,18 @@ export function AssetsTable() {
                             </DropdownMenuItem>
                           )}
                           {a.status === "ASSIGNED" && a.currentAssignment && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setReassignTarget({
+                                  assignmentId: a.currentAssignment!.id,
+                                  employeeName: `${a.currentAssignment!.employee.firstName} ${a.currentAssignment!.employee.lastName}`,
+                                })
+                              }
+                            >
+                              <UserCog /> Reassign
+                            </DropdownMenuItem>
+                          )}
+                          {a.status === "ASSIGNED" && a.currentAssignment && (
                             <DropdownMenuItem onClick={() => setReturnTarget(a.currentAssignment!.id)}>
                               <Undo2 /> Return
                             </DropdownMenuItem>
@@ -221,6 +235,13 @@ export function AssetsTable() {
         assignmentId={returnTarget}
         open={!!returnTarget}
         onOpenChange={(open) => !open && setReturnTarget(null)}
+        onSaved={load}
+      />
+      <ReassignAssetDialog
+        assignmentId={reassignTarget?.assignmentId ?? null}
+        currentEmployeeName={reassignTarget?.employeeName ?? null}
+        open={!!reassignTarget}
+        onOpenChange={(open) => !open && setReassignTarget(null)}
         onSaved={load}
       />
 

@@ -7,7 +7,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@
 import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageAssets } from "@/features/assets/authorization"
-import type { AssetFormInput, AssignAssetInput, ReturnAssetInput } from "@/features/assets/schemas"
+import type { AssetFormInput, AssignAssetInput, ReassignAssetInput, ReturnAssetInput } from "@/features/assets/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
 
@@ -163,4 +163,55 @@ export async function returnAsset(assignmentId: string, input: ReturnAssetInput,
   })
 
   return updated
+}
+
+/** Corrects a wrong assignment in one step — closes out the current
+ * assignment and opens a new one for the right employee, without ever
+ * bouncing Asset.status back through AVAILABLE (unlike a manual
+ * return-then-assign, which would also leave a spurious same-day
+ * "returned" event in the history for what's really just a correction). */
+export async function reassignAsset(assignmentId: string, input: ReassignAssetInput, viewer: AccessTokenPayload, meta: Meta) {
+  assertCanManage(viewer)
+
+  const assignment = await prisma.assetAssignment.findUnique({ where: { id: assignmentId } })
+  if (!assignment) throw new NotFoundError("Assignment not found")
+  if (assignment.status !== "ASSIGNED") throw new ValidationError("This asset has already been returned")
+  if (input.employeeId === assignment.employeeId) {
+    throw new ValidationError("This asset is already assigned to that employee")
+  }
+
+  const employee = await prisma.employee.findUnique({ where: { id: input.employeeId, deletedAt: null } })
+  if (!employee) throw new NotFoundError("Employee not found")
+
+  const [, newAssignment] = await prisma.$transaction([
+    prisma.assetAssignment.update({
+      where: { id: assignmentId },
+      data: {
+        status: "RETURNED",
+        returnDate: new Date(input.issuedDate),
+        remarks: assignment.remarks ? `${assignment.remarks}\n(Reassigned — wrong assignment corrected)` : "Reassigned — wrong assignment corrected",
+      },
+    }),
+    prisma.assetAssignment.create({
+      data: {
+        assetId: assignment.assetId,
+        employeeId: input.employeeId,
+        issuedDate: new Date(input.issuedDate),
+        condition: input.condition || null,
+        remarks: input.remarks || null,
+        status: "ASSIGNED",
+      },
+    }),
+  ])
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "ASSET_REASSIGNED",
+    entityType: "Asset",
+    entityId: assignment.assetId,
+    metadata: { fromAssignmentId: assignmentId, toAssignmentId: newAssignment.id, employeeId: input.employeeId },
+    ...meta,
+  })
+
+  return newAssignment
 }
