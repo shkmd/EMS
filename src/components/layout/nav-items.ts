@@ -5,6 +5,7 @@ import {
   Building2,
   IdCard,
   Clock,
+  Timer,
   CalendarDays,
   PartyPopper,
   Wallet,
@@ -65,6 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Attendance", href: "/attendance", icon: Clock },
       { label: "Leave", href: "/leave", icon: CalendarDays },
+      { label: "Permission", href: "/permission", icon: Timer },
       { label: "Holidays", href: "/holidays", icon: PartyPopper },
     ],
   },

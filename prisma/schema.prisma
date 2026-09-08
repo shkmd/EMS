@@ -516,37 +516,40 @@ model Employee {
   subordinates     Employee[]   @relation("ManagerSubordinates")
   departmentHeadOf Department?  @relation("DepartmentHead")
 
-  documents               EmployeeDocument[]
-  notes                   EmployeeNote[]
-  timelineEvents          EmployeeTimelineEvent[]
-  offboardings            Offboarding[]
-  onboardings             Onboarding[]
-  attendances             Attendance[]
-  screenActivities        ScreenActivity[]
-  dailyLogs               DailyLog[]
-  leaveRequestsMade       LeaveRequest[]          @relation("LeaveApplicant")
-  leaveRequestsManaged    LeaveRequest[]          @relation("LeaveManagerApprover")
-  leaveRequestsHrManaged  LeaveRequest[]          @relation("LeaveHrApprover")
-  leaveBalances           LeaveBalance[]
-  expenseClaimsMade       ExpenseClaim[]          @relation("ExpenseApplicant")
-  expenseClaimsManaged    ExpenseClaim[]          @relation("ExpenseManagerApprover")
-  expenseClaimsHrManaged  ExpenseClaim[]          @relation("ExpenseHrApprover")
-  payslips                Payslip[]
-  goals                   PerformanceGoal[]
-  kpis                    KPI[]
-  performanceReviews      PerformanceReview[]     @relation("RevieweeEmployee")
-  assetAssignments        AssetAssignment[]
-  notifications           Notification[]
-  taskAssignments         TaskAssignee[]
-  subscriptionsToNotify   Subscription[]
-  hiredFromCandidate      Candidate?              @relation("CandidateHiredEmployee")
-  interviewPanelist       InterviewPanelist[]
-  courseEnrollments       CourseEnrollment[]
-  skills                  EmployeeSkill[]
-  policyAcknowledgments   PolicyAcknowledgment[]
-  poshCommitteeMembership PoshCommitteeMember?
-  poshCasesFiled          PoshCase[]              @relation("PoshComplainant")
-  poshCasesAsRespondent   PoshCase[]              @relation("PoshRespondent")
+  documents                   EmployeeDocument[]
+  notes                       EmployeeNote[]
+  timelineEvents              EmployeeTimelineEvent[]
+  offboardings                Offboarding[]
+  onboardings                 Onboarding[]
+  attendances                 Attendance[]
+  screenActivities            ScreenActivity[]
+  dailyLogs                   DailyLog[]
+  leaveRequestsMade           LeaveRequest[]          @relation("LeaveApplicant")
+  leaveRequestsManaged        LeaveRequest[]          @relation("LeaveManagerApprover")
+  leaveRequestsHrManaged      LeaveRequest[]          @relation("LeaveHrApprover")
+  leaveBalances               LeaveBalance[]
+  permissionRequestsMade      PermissionRequest[]     @relation("PermissionApplicant")
+  permissionRequestsManaged   PermissionRequest[]     @relation("PermissionManagerApprover")
+  permissionRequestsHrManaged PermissionRequest[]     @relation("PermissionHrApprover")
+  expenseClaimsMade           ExpenseClaim[]          @relation("ExpenseApplicant")
+  expenseClaimsManaged        ExpenseClaim[]          @relation("ExpenseManagerApprover")
+  expenseClaimsHrManaged      ExpenseClaim[]          @relation("ExpenseHrApprover")
+  payslips                    Payslip[]
+  goals                       PerformanceGoal[]
+  kpis                        KPI[]
+  performanceReviews          PerformanceReview[]     @relation("RevieweeEmployee")
+  assetAssignments            AssetAssignment[]
+  notifications               Notification[]
+  taskAssignments             TaskAssignee[]
+  subscriptionsToNotify       Subscription[]
+  hiredFromCandidate          Candidate?              @relation("CandidateHiredEmployee")
+  interviewPanelist           InterviewPanelist[]
+  courseEnrollments           CourseEnrollment[]
+  skills                      EmployeeSkill[]
+  policyAcknowledgments       PolicyAcknowledgment[]
+  poshCommitteeMembership     PoshCommitteeMember?
+  poshCasesFiled              PoshCase[]              @relation("PoshComplainant")
+  poshCasesAsRespondent       PoshCase[]              @relation("PoshRespondent")
 
   @@index([departmentId])
   @@index([designationId])
@@ -831,6 +834,38 @@ model LeaveRequest {
   @@index([employeeId])
   @@index([status])
   @@map("leave_requests")
+}
+
+// A short excused absence during the workday (e.g. "2 hours for a dentist
+// appointment") — distinct from Leave, which works in whole/half days and
+// deducts from a balance-bearing LeaveType. Hours are capped at 4 in the
+// zod schema; beyond that it should really be a half-day Leave instead.
+model PermissionRequest {
+  id         String             @id @default(cuid())
+  employeeId String
+  date       DateTime           @db.Date
+  hours      Decimal            @db.Decimal(3, 2)
+  reason     String             @db.Text
+  status     LeaveRequestStatus @default(PENDING)
+
+  managerId       String?
+  managerActionAt DateTime?
+  managerComment  String?   @db.Text
+
+  hrId       String?
+  hrActionAt DateTime?
+  hrComment  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee  @relation("PermissionApplicant", fields: [employeeId], references: [id], onDelete: Cascade)
+  manager  Employee? @relation("PermissionManagerApprover", fields: [managerId], references: [id], onDelete: SetNull)
+  hr       Employee? @relation("PermissionHrApprover", fields: [hrId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("permission_requests")
 }
 
 model ExpenseClaim {
