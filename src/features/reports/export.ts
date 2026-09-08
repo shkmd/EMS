@@ -160,3 +160,38 @@ export async function buildLateSummaryReportExcel(rows: LateSummaryReportRow[]) 
 export function buildLateSummaryReportCsv(rows: LateSummaryReportRow[]) {
   return buildCsv(LATE_SUMMARY_COLUMNS, rows.map(toLateSummaryRow))
 }
+
+type PermissionSummaryReportRow = {
+  employeeCode: string
+  firstName: string
+  lastName: string
+  department: string | null
+  requestCount: number
+  totalHours: number
+}
+
+const PERMISSION_SUMMARY_COLUMNS = [
+  { header: "Employee Code", key: "employeeCode", width: 16 },
+  { header: "Name", key: "name", width: 24 },
+  { header: "Department", key: "department", width: 18 },
+  { header: "Requests", key: "requestCount", width: 12 },
+  { header: "Total Hours", key: "totalHours", width: 14 },
+]
+
+function toPermissionSummaryRow(r: PermissionSummaryReportRow) {
+  return {
+    employeeCode: r.employeeCode,
+    name: `${r.firstName} ${r.lastName}`,
+    department: r.department ?? "—",
+    requestCount: r.requestCount,
+    totalHours: r.totalHours,
+  }
+}
+
+export async function buildPermissionSummaryReportExcel(rows: PermissionSummaryReportRow[]) {
+  return buildExcel("Permission Summary", PERMISSION_SUMMARY_COLUMNS, rows.map(toPermissionSummaryRow))
+}
+
+export function buildPermissionSummaryReportCsv(rows: PermissionSummaryReportRow[]) {
+  return buildCsv(PERMISSION_SUMMARY_COLUMNS, rows.map(toPermissionSummaryRow))
+}

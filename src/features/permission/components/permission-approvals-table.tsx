@@ -22,10 +22,13 @@ import {
 } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api-client"
 import { PERMISSION_STATUS_BADGE, PERMISSION_STATUS_LABELS } from "@/features/permission/lib/status-labels"
+import { formatTime12h } from "@/features/permission/lib/time"
 
 type ApprovalRow = {
   id: string
   date: string
+  fromTime: string | null
+  toTime: string | null
   hours: number
   reason: string
   status: string
@@ -91,7 +94,7 @@ export function PermissionApprovalsTable({ scope, actionType }: { scope: string;
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Hours</TableHead>
+                  <TableHead>Time</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead className="w-32" />
@@ -123,7 +126,9 @@ export function PermissionApprovalsTable({ scope, actionType }: { scope: string;
                         </div>
                       </TableCell>
                       <TableCell>{format(new Date(r.date), "dd MMM yyyy")}</TableCell>
-                      <TableCell>{r.hours}</TableCell>
+                      <TableCell>
+                        {r.fromTime && r.toTime ? `${formatTime12h(r.fromTime)} – ${formatTime12h(r.toTime)}` : `${r.hours}h`}
+                      </TableCell>
                       <TableCell>
                         <Badge className={PERMISSION_STATUS_BADGE[r.status]}>
                           {PERMISSION_STATUS_LABELS[r.status] ?? r.status}
@@ -164,8 +169,12 @@ export function PermissionApprovalsTable({ scope, actionType }: { scope: string;
             <DialogDescription>
               {actionTarget && (
                 <>
-                  {actionTarget.request.employee.firstName} {actionTarget.request.employee.lastName}&apos;s{" "}
-                  {actionTarget.request.hours}-hour permission request.
+                  {actionTarget.request.employee.firstName} {actionTarget.request.employee.lastName}&apos;s permission
+                  request
+                  {actionTarget.request.fromTime && actionTarget.request.toTime
+                    ? ` (${formatTime12h(actionTarget.request.fromTime)} – ${formatTime12h(actionTarget.request.toTime)})`
+                    : ` (${actionTarget.request.hours}h)`}
+                  .
                 </>
               )}
             </DialogDescription>

@@ -8,6 +8,7 @@ import { listLeaveTypes } from "@/features/leave/queries";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
 import { LeaveReportCard } from "@/features/reports/components/leave-report-card";
 import { LateSummaryReportCard } from "@/features/reports/components/late-summary-report-card";
+import { PermissionSummaryReportCard } from "@/features/reports/components/permission-summary-report-card";
 import { AssetReportCard } from "@/features/reports/components/asset-report-card";
 import { EmployeeReportCard } from "@/features/reports/components/employee-report-card";
 import { PayrollReportCard } from "@/features/reports/components/payroll-report-card";
@@ -45,6 +46,7 @@ export default async function ReportsPage() {
           <EmployeeReportCard departments={departments} />
           <AttendanceReport departments={departments} employees={employeeOptions} canManage={false} />
           <LateSummaryReportCard departments={departments} />
+          <PermissionSummaryReportCard departments={departments} />
           <LeaveReportCard departments={departments} leaveTypes={leaveTypes} />
           <PayrollReportCard departments={departments} />
           <AssetReportCard />

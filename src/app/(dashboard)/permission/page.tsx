@@ -55,6 +55,8 @@ export default async function PermissionPage({
               requests={myRequests.map((r) => ({
                 id: r.id,
                 date: r.date,
+                fromTime: r.fromTime,
+                toTime: r.toTime,
                 hours: Number(r.hours),
                 reason: r.reason,
                 status: r.status,

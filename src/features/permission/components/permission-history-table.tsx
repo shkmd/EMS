@@ -21,10 +21,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { apiFetch } from "@/lib/api-client"
 import { PERMISSION_STATUS_BADGE, PERMISSION_STATUS_LABELS } from "@/features/permission/lib/status-labels"
+import { formatTime12h } from "@/features/permission/lib/time"
 
 export type PermissionRequestRow = {
   id: string
   date: Date | string
+  fromTime: string | null
+  toTime: string | null
   hours: number
   reason: string
   status: string
@@ -62,7 +65,7 @@ export function PermissionHistoryTable({ requests }: { requests: PermissionReque
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
-            <TableHead>Hours</TableHead>
+            <TableHead>Time</TableHead>
             <TableHead>Reason</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-10" />
@@ -79,7 +82,11 @@ export function PermissionHistoryTable({ requests }: { requests: PermissionReque
             requests.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{format(new Date(r.date), "dd MMM yyyy")}</TableCell>
-                <TableCell>{r.hours}</TableCell>
+                <TableCell>
+                  {r.fromTime && r.toTime
+                    ? `${formatTime12h(r.fromTime)} – ${formatTime12h(r.toTime)}`
+                    : `${r.hours}h`}
+                </TableCell>
                 <TableCell className="max-w-xs truncate text-muted-foreground">{r.reason}</TableCell>
                 <TableCell>
                   <Badge className={PERMISSION_STATUS_BADGE[r.status]}>{PERMISSION_STATUS_LABELS[r.status] ?? r.status}</Badge>
@@ -104,8 +111,11 @@ export function PermissionHistoryTable({ requests }: { requests: PermissionReque
             <AlertDialogDescription>
               {cancelTarget && (
                 <>
-                  This will cancel your {cancelTarget.hours}-hour permission request for{" "}
-                  {format(new Date(cancelTarget.date), "dd MMM yyyy")}.
+                  This will cancel your permission request for {format(new Date(cancelTarget.date), "dd MMM yyyy")}
+                  {cancelTarget.fromTime && cancelTarget.toTime
+                    ? ` (${formatTime12h(cancelTarget.fromTime)} – ${formatTime12h(cancelTarget.toTime)})`
+                    : ` (${cancelTarget.hours}h)`}
+                  .
                 </>
               )}
             </AlertDialogDescription>

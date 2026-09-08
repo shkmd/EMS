@@ -7,6 +7,7 @@ import { notifyUser } from "@/lib/notify"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canActAsHr, canActAsManager } from "@/features/permission/authorization"
 import { getManagedVerticalIds } from "@/features/verticals/scope"
+import { hoursBetween } from "@/features/permission/lib/time"
 import type { ApplyPermissionInput, PermissionActionInput, RecordPermissionInput } from "@/features/permission/schemas"
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null }
@@ -28,11 +29,16 @@ export async function applyPermission(input: ApplyPermissionInput, viewer: Acces
   })
   if (!employee) throw new NotFoundError("Employee not found")
 
+  const hours = hoursBetween(input.fromTime, input.toTime)
+  if (hours === null) throw new ValidationError("End time must be after start time, within 4 hours")
+
   const request = await prisma.permissionRequest.create({
     data: {
       employeeId: employee.id,
       date: new Date(input.date),
-      hours: Number(input.hours),
+      fromTime: input.fromTime,
+      toTime: input.toTime,
+      hours,
       reason: input.reason,
       status: "PENDING",
     },
@@ -49,14 +55,14 @@ export async function applyPermission(input: ApplyPermissionInput, viewer: Acces
         manager.userId,
         manager.id,
         "Permission request awaiting your approval",
-        `${applicantName} requested ${input.hours} hour(s) permission.`,
+        `${applicantName} requested permission from ${input.fromTime} to ${input.toTime}.`,
         "/permission?tab=approvals"
       )
     }
   } else {
     await notifyHrUsers(
       "Permission request awaiting approval",
-      `${applicantName} requested ${input.hours} hour(s) permission and has no assigned manager.`,
+      `${applicantName} requested permission from ${input.fromTime} to ${input.toTime} and has no assigned manager.`,
       "/permission?tab=approvals"
     )
   }
@@ -218,13 +224,18 @@ export async function recordPermissionForEmployee(input: RecordPermissionInput, 
   })
   if (!employee) throw new NotFoundError("Employee not found")
 
+  const hours = hoursBetween(input.fromTime, input.toTime)
+  if (hours === null) throw new ValidationError("End time must be after start time, within 4 hours")
+
   const hrEmployeeId = viewer.employeeId ?? null
 
   const created = await prisma.permissionRequest.create({
     data: {
       employeeId: employee.id,
       date: new Date(input.date),
-      hours: Number(input.hours),
+      fromTime: input.fromTime,
+      toTime: input.toTime,
+      hours,
       reason: input.reason,
       status: input.status,
       ...(input.status === "APPROVED" ? { hrId: hrEmployeeId, hrActionAt: new Date() } : {}),
@@ -241,4 +252,25 @@ export async function recordPermissionForEmployee(input: RecordPermissionInput, 
   })
 
   return created
+}
+
+/** HR-only permanent removal — for erroneous or duplicate entries, distinct
+ * from cancelPermission (which just changes status and keeps the record).
+ * Unlike deleteLeaveRequest, there's no balance to reverse. */
+export async function deletePermissionRequest(id: string, viewer: AccessTokenPayload, meta: Meta) {
+  if (!canActAsHr(viewer.role)) throw new ForbiddenError()
+
+  const existing = await prisma.permissionRequest.findUnique({ where: { id } })
+  if (!existing) throw new NotFoundError("Permission request not found")
+
+  await prisma.permissionRequest.delete({ where: { id } })
+
+  await recordAuditLog({
+    userId: viewer.sub,
+    action: "PERMISSION_REQUEST_DELETED",
+    entityType: "PermissionRequest",
+    entityId: id,
+    metadata: { employeeId: existing.employeeId, status: existing.status },
+    ...meta,
+  })
 }

@@ -23,7 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { apiFetch } from "@/lib/api-client"
 import { applyPermissionSchema, type ApplyPermissionInput } from "@/features/permission/schemas"
 
-const defaultValues: ApplyPermissionInput = { date: "", hours: "1", reason: "" }
+const defaultValues: ApplyPermissionInput = { date: "", fromTime: "", toTime: "", reason: "" }
 
 export function ApplyPermissionDialog() {
   const router = useRouter()
@@ -71,15 +71,28 @@ export function ApplyPermissionDialog() {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="date"
+                name="fromTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date</FormLabel>
+                    <FormLabel>From</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="time" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -87,12 +100,12 @@ export function ApplyPermissionDialog() {
               />
               <FormField
                 control={form.control}
-                name="hours"
+                name="toTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Hours</FormLabel>
+                    <FormLabel>To</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.5" min="0.5" max="4" {...field} />
+                      <Input type="time" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

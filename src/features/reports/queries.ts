@@ -7,7 +7,12 @@ import { listAssets } from "@/features/assets/queries"
 import { getWorkingHoursMap } from "@/features/verticals/queries"
 import { getCompanySettings } from "@/features/settings/queries"
 import { getLateMinutes } from "@/features/attendance/lib/late"
-import type { LeaveReportQuery, AssetReportQuery, LateSummaryReportQuery } from "@/features/reports/schemas"
+import type {
+  LeaveReportQuery,
+  AssetReportQuery,
+  LateSummaryReportQuery,
+  PermissionSummaryReportQuery,
+} from "@/features/reports/schemas"
 
 export async function getLeaveReportRows(query: LeaveReportQuery) {
   const where: Prisma.LeaveRequestWhereInput = {
@@ -96,4 +101,55 @@ export async function getLateSummaryReportRows(query: LateSummaryReportQuery) {
   }
 
   return [...byEmployee.values()].sort((a, b) => b.daysLate - a.daysLate)
+}
+
+/** Per-employee total permission hours/count within a date range — only
+ * APPROVED requests count, since pending/rejected/cancelled never actually
+ * happened. */
+export async function getPermissionSummaryReportRows(query: PermissionSummaryReportQuery) {
+  const records = await prisma.permissionRequest.findMany({
+    where: {
+      status: "APPROVED",
+      date: { gte: new Date(query.dateFrom), lte: new Date(query.dateTo) },
+      employee: {
+        deletedAt: null,
+        ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      },
+    },
+    select: {
+      hours: true,
+      employee: {
+        select: { id: true, employeeCode: true, firstName: true, lastName: true, department: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ employee: { firstName: "asc" } }],
+  })
+
+  const byEmployee = new Map<
+    string,
+    {
+      employeeCode: string
+      firstName: string
+      lastName: string
+      department: string | null
+      requestCount: number
+      totalHours: number
+    }
+  >()
+
+  for (const r of records) {
+    const existing = byEmployee.get(r.employee.id) ?? {
+      employeeCode: r.employee.employeeCode,
+      firstName: r.employee.firstName,
+      lastName: r.employee.lastName,
+      department: r.employee.department?.name ?? null,
+      requestCount: 0,
+      totalHours: 0,
+    }
+    existing.requestCount += 1
+    existing.totalHours += Number(r.hours)
+    byEmployee.set(r.employee.id, existing)
+  }
+
+  return [...byEmployee.values()].sort((a, b) => b.totalHours - a.totalHours)
 }

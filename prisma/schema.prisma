@@ -844,6 +844,8 @@ model PermissionRequest {
   id         String             @id @default(cuid())
   employeeId String
   date       DateTime           @db.Date
+  fromTime   String?
+  toTime     String?
   hours      Decimal            @db.Decimal(3, 2)
   reason     String             @db.Text
   status     LeaveRequestStatus @default(PENDING)

@@ -23,3 +23,10 @@ export const lateSummaryReportQuerySchema = z.object({
   departmentId: z.string().optional(),
 })
 export type LateSummaryReportQuery = z.infer<typeof lateSummaryReportQuerySchema>
+
+export const permissionSummaryReportQuerySchema = z.object({
+  dateFrom: z.string().min(1, "Start date is required"),
+  dateTo: z.string().min(1, "End date is required"),
+  departmentId: z.string().optional(),
+})
+export type PermissionSummaryReportQuery = z.infer<typeof permissionSummaryReportQuerySchema>
