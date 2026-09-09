@@ -43,12 +43,21 @@ function formatDuration(seconds: number) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
-// A tab open but untouched for a while (no heartbeat in the last couple of
-// intervals) means the screen-time numbers are stale, not necessarily that
-// the person just went idle this instant.
-function isRecentlySeen(lastSeenAt: string | null) {
-  if (!lastSeenAt) return false
-  return Date.now() - new Date(lastSeenAt).getTime() < 2 * 60_000
+// Presence is derived purely from how long ago the last heartbeat arrived —
+// there's no separate "on break" signal here. A missed heartbeat or two
+// (background-tab throttling, a brief step away, a network blip) does NOT
+// mean someone vanished, so this deliberately has a wide "Idle" middle
+// ground before ever showing "Away" — a labelled status, never a dot that
+// just silently disappears.
+const PRESENCE_IDLE_AFTER_MS = 3 * 60_000
+const PRESENCE_AWAY_AFTER_MS = 10 * 60_000
+
+function getPresence(lastSeenAt: string | null): { label: string; dotClassName: string } {
+  if (!lastSeenAt) return { label: "No activity today", dotClassName: "bg-muted-foreground/40" }
+  const elapsed = Date.now() - new Date(lastSeenAt).getTime()
+  if (elapsed < PRESENCE_IDLE_AFTER_MS) return { label: "Active", dotClassName: "bg-emerald-500" }
+  if (elapsed < PRESENCE_AWAY_AFTER_MS) return { label: "Idle", dotClassName: "bg-amber-500" }
+  return { label: "Away", dotClassName: "bg-muted-foreground/40" }
 }
 
 function initials(firstName: string, lastName: string) {
@@ -194,15 +203,18 @@ export function TeamAttendanceTable({
                       </TableCell>
                       <TableCell>
                         {member.screenActivity ? (
-                          <div className="flex items-center gap-1.5 text-xs">
-                            {isRecentlySeen(member.screenActivity.lastSeenAt) && (
-                              <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" title="Active recently" />
-                            )}
-                            <span>
-                              {formatDuration(member.screenActivity.activeSeconds)} active
-                              <span className="text-muted-foreground"> · {formatDuration(member.screenActivity.idleSeconds)} idle</span>
-                            </span>
-                          </div>
+                          (() => {
+                            const presence = getPresence(member.screenActivity.lastSeenAt)
+                            return (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className={`size-1.5 shrink-0 rounded-full ${presence.dotClassName}`} title={presence.label} />
+                                <span>
+                                  {presence.label} · {formatDuration(member.screenActivity.activeSeconds)} active
+                                  <span className="text-muted-foreground"> · {formatDuration(member.screenActivity.idleSeconds)} idle</span>
+                                </span>
+                              </div>
+                            )
+                          })()
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
