@@ -187,7 +187,7 @@ function VideoTile({
     <div
       className={cn(
         "relative flex aspect-video items-center justify-center overflow-hidden rounded-md bg-neutral-900",
-        size === "sm" ? "w-40" : "w-full max-w-md"
+        size === "sm" ? "w-40" : "h-full max-h-[70vh] w-auto max-w-[90vw]"
       )}
     >
       {showVideo && stream ? (

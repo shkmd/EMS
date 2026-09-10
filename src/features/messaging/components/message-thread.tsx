@@ -17,8 +17,13 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
 /** Renders a message body with `@Full Name` substrings (matching an actual
  * participant) highlighted, so a mention reads visually distinct from
- * plain text that happens to contain an @. */
-function MessageBody({ body, participants }: { body: string; participants: ParticipantRef[] }) {
+ * plain text that happens to contain an @. Given its own background pill
+ * rather than just a text color — `text-primary` alone used to render
+ * invisibly on an own (`bg-primary`) bubble, since it's the exact same
+ * color as the bubble behind it, and was low-contrast against `bg-muted`
+ * too. `isOwn` picks a pill that composites against whichever bubble
+ * background it's actually sitting on. */
+function MessageBody({ body, isOwn, participants }: { body: string; isOwn: boolean; participants: ParticipantRef[] }) {
   if (participants.length === 0) return <>{body}</>
 
   const names = [...new Set(participants.map((p) => p.name))].sort((a, b) => b.length - a.length)
@@ -30,7 +35,13 @@ function MessageBody({ body, participants }: { body: string; participants: Parti
   while ((match = pattern.exec(body))) {
     if (match.index > lastIndex) parts.push(body.slice(lastIndex, match.index))
     parts.push(
-      <span key={match.index} className="font-medium text-primary">
+      <span
+        key={match.index}
+        className={cn(
+          "rounded px-1 font-semibold",
+          isOwn ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/15 text-primary"
+        )}
+      >
         {match[0]}
       </span>
     )
@@ -252,16 +263,16 @@ export function MessageThread({
               const senderName = isGroup && !isOwn ? senderById.get(m.senderId)?.name : null
               return (
                 <div key={m.id} className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
-                  <div className={cn("flex max-w-[75%] flex-col gap-1", isOwn && "items-end")}>
+                  <div className={cn("flex min-w-0 max-w-[75%] flex-col gap-1", isOwn && "items-end")}>
                     {senderName && <span className="px-1 text-[11px] font-medium text-muted-foreground">{senderName}</span>}
                     {m.body && (
                       <div
                         className={cn(
-                          "rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap",
+                          "rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-break-word",
                           isOwn ? "bg-primary text-primary-foreground" : "bg-muted"
                         )}
                       >
-                        <MessageBody body={m.body} participants={conversation.participants} />
+                        <MessageBody body={m.body} isOwn={isOwn} participants={conversation.participants} />
                       </div>
                     )}
                     {m.attachmentUrl && <AttachmentPreview message={m} />}
