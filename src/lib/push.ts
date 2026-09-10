@@ -18,7 +18,10 @@ function ensureConfigured() {
   return true
 }
 
-type PushPayload = { title: string; body: string; url?: string }
+// `type: "call"` lets the service worker's push handler render it as a
+// ring (vibration, requireInteraction) instead of a normal silent toast —
+// see public/sw.js.
+type PushPayload = { title: string; body: string; url?: string; type?: "call" }
 
 /**
  * Sends a push notification to every device a user has subscribed from.

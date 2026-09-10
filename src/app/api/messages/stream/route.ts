@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 
 import { requireSession } from "@/features/auth/session"
 import { subscribeToUser } from "@/features/messaging/lib/realtime"
+import { getPendingCall } from "@/features/messaging/lib/pending-calls"
 
 // Long-lived streaming response — must opt out of any static/caching
 // behavior Next might otherwise apply to a route handler.
@@ -22,6 +23,15 @@ export async function GET(req: NextRequest) {
       }
 
       controller.enqueue(encoder.encode(": connected\n\n"))
+
+      // A client connecting late (e.g. opening the app after a push
+      // notification, well after the live "invite" event fired into an
+      // empty room) still needs to see the call it was invited to, as long
+      // as it hasn't expired/been answered/declined/ended elsewhere.
+      const pending = getPendingCall(userId)
+      if (pending) {
+        send({ type: "call-signal", conversationId: pending.conversationId, fromUserId: pending.fromUserId, signal: pending.signal })
+      }
 
       const unsubscribe = subscribeToUser(userId, send)
 

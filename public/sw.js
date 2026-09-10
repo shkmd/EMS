@@ -36,12 +36,24 @@ self.addEventListener("push", (event) => {
     payload = { title: "EMS", body: event.data.text() };
   }
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title || "EMS", {
-      body: payload.body,
-      data: { url: payload.url || "/dashboard" },
-    })
-  );
+  const options = {
+    body: payload.body,
+    data: { url: payload.url || "/dashboard" },
+  };
+
+  // A call invite needs to read as a ring, not a normal silent toast:
+  // vibrate so it's noticeable even face-down/pocketed, requireInteraction
+  // so it doesn't auto-dismiss before the person notices, and tag/renotify
+  // so a repeat invite for the same conversation replaces rather than
+  // stacks duplicate notifications.
+  if (payload.type === "call") {
+    options.vibrate = [300, 150, 300, 150, 300, 150, 300];
+    options.requireInteraction = true;
+    options.tag = payload.url || "call";
+    options.renotify = true;
+  }
+
+  event.waitUntil(self.registration.showNotification(payload.title || "EMS", options));
 });
 
 self.addEventListener("notificationclick", (event) => {

@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors"
 import { saveUploadedFile, assertAllowedFile, ALLOWED_DOCUMENT_MIME_TYPES, ALLOWED_PHOTO_MIME_TYPES } from "@/lib/storage"
 import type { AccessTokenPayload } from "@/lib/jwt"
+import { sendPushToUser } from "@/lib/push"
 import { isConversationParticipant } from "@/features/messaging/authorization"
 import { publishToUser } from "@/features/messaging/lib/realtime"
+import { setPendingCall, clearPendingCall } from "@/features/messaging/lib/pending-calls"
 import type { SendMessageInput, CallSignalInput } from "@/features/messaging/schemas"
 
 const ALLOWED_ATTACHMENT_MIME_TYPES = [...new Set([...ALLOWED_DOCUMENT_MIME_TYPES, ...ALLOWED_PHOTO_MIME_TYPES])]
@@ -149,6 +151,36 @@ export async function relayCallSignal(conversationId: string, signal: CallSignal
 
   for (const targetId of otherParticipantIds) {
     publishToUser(targetId, { type: "call-signal", conversationId, fromUserId: viewer.sub, signal })
+  }
+
+  // "invite" needs to reach a recipient who doesn't currently have a live
+  // SSE connection at all (app fully closed) — publishToUser above only
+  // reaches an already-open tab. Cover that gap with (a) a short-lived
+  // pending-call record a late-connecting client replays on connect (see
+  // stream/route.ts), and (b) a push notification so they're told to open
+  // the app in the first place. accept/decline/end clear that record so a
+  // call that's already over doesn't resurrect itself for someone who opens
+  // the app afterward.
+  if (signal.kind === "invite") {
+    const caller = await prisma.user.findUnique({
+      where: { id: viewer.sub },
+      select: { email: true, employee: { select: { firstName: true, lastName: true } } },
+    })
+    const callerName = caller?.employee ? `${caller.employee.firstName} ${caller.employee.lastName}` : (caller?.email ?? "Someone")
+
+    for (const targetId of otherParticipantIds) {
+      setPendingCall(targetId, { conversationId, fromUserId: viewer.sub, signal })
+      await sendPushToUser(targetId, {
+        title: "Incoming call",
+        body: `${callerName} is calling…`,
+        url: `/messages?conversation=${conversationId}`,
+        type: "call",
+      })
+    }
+  } else if (signal.kind === "accept" || signal.kind === "decline" || signal.kind === "end") {
+    for (const targetId of otherParticipantIds) {
+      clearPendingCall(targetId, signal.callId)
+    }
   }
 }
 
