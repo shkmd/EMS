@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { forbidden } from "next/navigation";
+import { format } from "date-fns";
 import { Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,8 @@ import { AccountAccessCard } from "@/features/employees/components/account-acces
 import { canViewTeamLeave } from "@/features/leave/authorization";
 import { getLeaveBalances } from "@/features/leave/queries";
 import { LeaveBalanceCards } from "@/features/leave/components/leave-balance-cards";
+import { getPermissionHoursThisMonth } from "@/features/permission/queries";
+import { PERMISSION_MONTHLY_LIMIT_HOURS } from "@/features/permission/lib/constants";
 import { SetBreadcrumbLabel } from "@/components/layout/page-breadcrumb";
 
 export const metadata: Metadata = { title: "Employee Profile | EMS" };
@@ -56,10 +59,14 @@ export default async function EmployeeDetailPage({
     throw error;
   }
   const canManage = canManageEmployees(session.role);
+  const isSelf = session.employeeId === employee.id;
   const canViewLeaveBalance = canViewTeamLeave(session.role);
-  const leaveBalances = canViewLeaveBalance
-    ? await getLeaveBalances(employee.id, new Date().getFullYear())
-    : [];
+  const canViewPermissionUsage = canViewLeaveBalance || isSelf;
+  const [leaveBalances, permissionHoursThisMonth] = await Promise.all([
+    canViewLeaveBalance ? getLeaveBalances(employee.id, new Date().getFullYear()) : Promise.resolve([]),
+    canViewPermissionUsage ? getPermissionHoursThisMonth(employee.id) : Promise.resolve(0),
+  ]);
+  const permissionExceeded = permissionHoursThisMonth > PERMISSION_MONTHLY_LIMIT_HOURS;
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -112,6 +119,24 @@ export default async function EmployeeDetailPage({
           <CardContent className="flex flex-col gap-4">
             <h2 className="text-sm font-medium">Leave Balance ({new Date().getFullYear()})</h2>
             <LeaveBalanceCards balances={leaveBalances} />
+          </CardContent>
+        </Card>
+      )}
+
+      {canViewPermissionUsage && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-medium">Permission Hours ({format(new Date(), "MMMM yyyy")})</h2>
+              <p className="text-sm text-muted-foreground">
+                {permissionHoursThisMonth}h of {PERMISSION_MONTHLY_LIMIT_HOURS}h used this month
+              </p>
+            </div>
+            {permissionExceeded && (
+              <Badge className="bg-red-500/10 text-red-700 dark:text-red-400">
+                Exceeded by {(permissionHoursThisMonth - PERMISSION_MONTHLY_LIMIT_HOURS).toFixed(1)}h
+              </Badge>
+            )}
           </CardContent>
         </Card>
       )}

@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { Prisma } from "@prisma/client"
+import { startOfMonth, endOfMonth } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
 import { ForbiddenError, NotFoundError } from "@/lib/errors"
@@ -71,4 +72,18 @@ export async function getPermissionRequestDetail(id: string, viewer: AccessToken
   const managedVerticalIds = await getManagedVerticalIds(viewer)
   if (!canViewPermissionRequest(viewer, request, managedVerticalIds)) throw new ForbiddenError()
   return request
+}
+
+/** Total approved permission hours for an employee in the current calendar
+ * month — for the "exceeded their monthly allowance" flag on their profile. */
+export async function getPermissionHoursThisMonth(employeeId: string, reference: Date = new Date()) {
+  const result = await prisma.permissionRequest.aggregate({
+    where: {
+      employeeId,
+      status: "APPROVED",
+      date: { gte: startOfMonth(reference), lte: endOfMonth(reference) },
+    },
+    _sum: { hours: true },
+  })
+  return Number(result._sum.hours ?? 0)
 }
