@@ -38,6 +38,9 @@ type Vertical = {
   halfDayHours: number
   fullDayHours: number
   officeIpAllowlist: string | null
+  officeLat: number | null
+  officeLng: number | null
+  officeRadiusMeters: number | null
   managers: { id: string; firstName: string; lastName: string }[]
   _count: { employees: number }
 }

@@ -1400,20 +1400,26 @@ model CompanySettings {
 // Each carries its own working-hours configuration; employees not assigned
 // to one fall back to the global WorkingHoursSettings singleton below.
 model Vertical {
-  id                String   @id @default(cuid())
-  name              String   @unique
-  startTime         String   @default("09:00")
-  endTime           String   @default("18:00")
-  workingDays       Json // e.g. ["MON","TUE","WED","THU","FRI"]
-  graceMinutes      Int      @default(10)
-  halfDayHours      Decimal  @default(4) @db.Decimal(4, 2)
-  fullDayHours      Decimal  @default(8) @db.Decimal(4, 2)
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  startTime          String   @default("09:00")
+  endTime            String   @default("18:00")
+  workingDays        Json // e.g. ["MON","TUE","WED","THU","FRI"]
+  graceMinutes       Int      @default(10)
+  halfDayHours       Decimal  @default(4) @db.Decimal(4, 2)
+  fullDayHours       Decimal  @default(8) @db.Decimal(4, 2)
   // Comma/newline-separated list of exact IPs and/or IPv4 CIDR ranges
   // allowed to check in as this vertical's OFFICE-mode employees. Null/empty
   // means unrestricted (fail-open) until an admin configures it.
-  officeIpAllowlist String?  @db.Text
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  officeIpAllowlist  String?  @db.Text
+  // GPS geofence, checked alongside officeIpAllowlist — either passing is
+  // enough. All three must be set for the geofence to apply; a partially
+  // filled-in radius is treated as not configured.
+  officeLat          Float?
+  officeLng          Float?
+  officeRadiusMeters Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   employees   Employee[]
   managers    Employee[]   @relation("VerticalManagers")

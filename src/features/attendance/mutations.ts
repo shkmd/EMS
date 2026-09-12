@@ -10,6 +10,7 @@ import { recordAuditLog } from "@/lib/audit"
 import type { AccessTokenPayload } from "@/lib/jwt"
 import { canManageAttendance } from "@/features/attendance/authorization"
 import { isIpAllowed } from "@/features/attendance/lib/ip-allowlist"
+import { isWithinOfficeRadius } from "@/features/attendance/lib/geofence"
 import { getWorkingHoursForEmployee } from "@/features/verticals/queries"
 import { getCompanySettings } from "@/features/settings/queries"
 import { zonedTimeToUtc } from "@/lib/timezone"
@@ -71,22 +72,43 @@ async function findOrCreateTodayAttendance(employeeId: string, status: "PRESENT"
   })
 }
 
-async function assertCheckInAllowedFromIp(employeeId: string, ipAddress: string | null | undefined) {
+type Coords = { latitude: number; longitude: number }
+
+/** Two independent restrictions — office IP allowlist and a GPS geofence —
+ * either passing is enough. Only rules the admin has actually configured
+ * for the vertical count: an unconfigured method must NOT default to
+ * "pass", or it would silently defeat whichever method IS configured
+ * (e.g. a vertical with only an IP allowlist set, and no geofence, must
+ * still enforce that IP allowlist — the absent geofence isn't a free pass). */
+async function assertCheckInLocationAllowed(employeeId: string, ipAddress: string | null | undefined, coords: Coords | undefined) {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { workMode: true, vertical: { select: { officeIpAllowlist: true } } },
+    select: {
+      workMode: true,
+      vertical: { select: { officeIpAllowlist: true, officeLat: true, officeLng: true, officeRadiusMeters: true } },
+    },
   })
+  if (employee?.workMode !== "OFFICE") return
 
-  if (employee?.workMode === "OFFICE" && !isIpAllowed(ipAddress, employee.vertical?.officeIpAllowlist)) {
+  const vertical = employee.vertical
+  const hasIpRule = !!vertical?.officeIpAllowlist
+  const hasGeoRule = vertical?.officeLat != null && vertical?.officeLng != null && vertical?.officeRadiusMeters != null
+  if (!hasIpRule && !hasGeoRule) return
+
+  const ipOk = hasIpRule && isIpAllowed(ipAddress, vertical!.officeIpAllowlist)
+  const geoOk =
+    hasGeoRule && !!coords && isWithinOfficeRadius(coords.latitude, coords.longitude, vertical!.officeLat!, vertical!.officeLng!, vertical!.officeRadiusMeters!)
+
+  if (!ipOk && !geoOk) {
     throw new ValidationError(
-      "You must be connected to the office network to check in. If you work from home, ask HR to update your work mode."
+      "You must be connected to the office network or physically at the office to check in. If you work from home, ask HR to update your work mode."
     )
   }
 }
 
-export async function checkIn(viewer: AccessTokenPayload, asWorkFromHome: boolean, meta: Meta) {
+export async function checkIn(viewer: AccessTokenPayload, asWorkFromHome: boolean, meta: Meta, coords?: Coords) {
   const employeeId = requireSelfEmployeeId(viewer)
-  await assertCheckInAllowedFromIp(employeeId, meta.ipAddress)
+  await assertCheckInLocationAllowed(employeeId, meta.ipAddress, coords)
 
   const attendance = await findOrCreateTodayAttendance(employeeId, asWorkFromHome ? "WORK_FROM_HOME" : "PRESENT")
 

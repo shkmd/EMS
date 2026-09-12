@@ -11,7 +11,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const meta = { ipAddress: getClientIp(req.headers), userAgent: req.headers.get("user-agent") }
 
-    const attendance = await checkIn(session, !!body?.asWorkFromHome, meta)
+    const coords =
+      typeof body?.latitude === "number" && typeof body?.longitude === "number"
+        ? { latitude: body.latitude, longitude: body.longitude }
+        : undefined
+
+    const attendance = await checkIn(session, !!body?.asWorkFromHome, meta, coords)
     return apiSuccess({ attendance }, "Checked in")
   } catch (error) {
     return apiError(error)

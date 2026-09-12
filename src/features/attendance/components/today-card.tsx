@@ -33,6 +33,36 @@ function formatTime(iso: string | null) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
+/** Best-effort location for the office geofence check — never blocks
+ * check-in on denial/timeout/unsupported, since IP may still cover it (or
+ * neither may be configured at all). Resolves null rather than rejecting. */
+function getCurrentCoords(): Promise<{ latitude: number; longitude: number } | null> {
+  return new Promise((resolve) => {
+    if (!("geolocation" in navigator)) {
+      resolve(null)
+      return
+    }
+    let settled = false
+    const finish = (value: { latitude: number; longitude: number } | null) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const timeout = setTimeout(() => finish(null), 8000)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        clearTimeout(timeout)
+        finish({ latitude: position.coords.latitude, longitude: position.coords.longitude })
+      },
+      () => {
+        clearTimeout(timeout)
+        finish(null)
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  })
+}
+
 export function TodayCard({ initial }: { initial: Attendance }) {
   const router = useRouter()
   const [attendance, setAttendance] = useState(initial)
@@ -76,6 +106,12 @@ export function TodayCard({ initial }: { initial: Attendance }) {
     }
   }
 
+  async function handleCheckIn() {
+    setLoadingAction("checkin")
+    const coords = await getCurrentCoords()
+    await runAction("checkin", "/api/attendance/check-in", coords ? { latitude: coords.latitude, longitude: coords.longitude } : undefined)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -111,7 +147,7 @@ export function TodayCard({ initial }: { initial: Attendance }) {
         <div className="flex flex-wrap gap-2">
           {!hasCheckedIn && (
             <>
-              <Button onClick={() => runAction("checkin", "/api/attendance/check-in")} disabled={!!loadingAction}>
+              <Button onClick={handleCheckIn} disabled={!!loadingAction}>
                 {loadingAction === "checkin" ? <Loader2 className="animate-spin" /> : <LogIn />}
                 Check In
               </Button>

@@ -16,6 +16,7 @@ function assertCanManage(viewer: AccessTokenPayload) {
 }
 
 function toVerticalData(input: VerticalFormInput) {
+  const hasGeofence = !!input.officeLat && !!input.officeLng && !!input.officeRadiusMeters
   return {
     name: input.name,
     startTime: input.startTime,
@@ -25,6 +26,9 @@ function toVerticalData(input: VerticalFormInput) {
     halfDayHours: Number(input.halfDayHours),
     fullDayHours: Number(input.fullDayHours),
     officeIpAllowlist: input.officeIpAllowlist?.trim() || null,
+    officeLat: hasGeofence ? Number(input.officeLat) : null,
+    officeLng: hasGeofence ? Number(input.officeLng) : null,
+    officeRadiusMeters: hasGeofence ? Number(input.officeRadiusMeters) : null,
   }
 }
 

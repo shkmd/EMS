@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, LocateFixed } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +39,9 @@ export type VerticalEditTarget = {
   halfDayHours: number
   fullDayHours: number
   officeIpAllowlist: string | null
+  officeLat: number | null
+  officeLng: number | null
+  officeRadiusMeters: number | null
   managers: { id: string; firstName: string; lastName: string }[]
 } | null
 
@@ -54,6 +57,7 @@ export function VerticalFormDialog({
   onSaved: () => void
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
   const [employees, setEmployees] = useState<AssigneeRef[]>([])
   const isEdit = !!target
 
@@ -69,6 +73,9 @@ export function VerticalFormDialog({
       fullDayHours: "8",
       managerIds: [],
       officeIpAllowlist: "",
+      officeLat: "",
+      officeLng: "",
+      officeRadiusMeters: "",
     },
   })
 
@@ -92,9 +99,32 @@ export function VerticalFormDialog({
         fullDayHours: target ? String(target.fullDayHours) : "8",
         managerIds: target?.managers.map((m) => m.id) ?? [],
         officeIpAllowlist: target?.officeIpAllowlist ?? "",
+        officeLat: target?.officeLat != null ? String(target.officeLat) : "",
+        officeLng: target?.officeLng != null ? String(target.officeLng) : "",
+        officeRadiusMeters: target?.officeRadiusMeters != null ? String(target.officeRadiusMeters) : "",
       })
     }
   }, [open, target, form])
+
+  function useCurrentLocation() {
+    if (!("geolocation" in navigator)) {
+      toast.error("Location isn't available in this browser")
+      return
+    }
+    setIsLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form.setValue("officeLat", position.coords.latitude.toFixed(6), { shouldValidate: true })
+        form.setValue("officeLng", position.coords.longitude.toFixed(6), { shouldValidate: true })
+        setIsLocating(false)
+      },
+      () => {
+        toast.error("Couldn't get your location — check the browser's location permission for this site")
+        setIsLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
 
   async function onSubmit(values: VerticalFormInput) {
     setIsSubmitting(true)
@@ -266,6 +296,61 @@ export function VerticalFormDialog({
                 </FormItem>
               )}
             />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <FormLabel>Office GPS geofence</FormLabel>
+                <Button type="button" variant="outline" size="sm" onClick={useCurrentLocation} disabled={isLocating}>
+                  {isLocating ? <Loader2 className="animate-spin" /> : <LocateFixed />}
+                  Use my current location
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="officeLat"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-normal text-muted-foreground">Latitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="any" placeholder="12.971600" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="officeLng"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-normal text-muted-foreground">Longitude</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="any" placeholder="77.594600" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="officeRadiusMeters"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-normal text-muted-foreground">Radius (m)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} placeholder="200" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Lets Office-mode employees check in from within this radius even off the office network. Either the
+                IP allowlist or this geofence passing is enough — leave all three blank to not use a GPS check for
+                this vertical.
+              </p>
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
