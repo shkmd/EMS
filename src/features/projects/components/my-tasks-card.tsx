@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { toast } from "sonner"
@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { apiFetch } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 import { TASK_STATUS_LABEL, TASK_STATUS_ORDER, TASK_PRIORITY_LABEL, TASK_PRIORITY_BADGE } from "@/features/projects/lib/labels"
+
+const ALL_STATUSES = "__all__"
 
 type MyTask = {
   id: string
@@ -27,6 +29,7 @@ type MyTask = {
 export function MyTasksCard() {
   const [tasks, setTasks] = useState<MyTask[] | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState(ALL_STATUSES)
 
   function loadTasks() {
     apiFetch<{ tasks: MyTask[] }>("/api/projects/my-tasks").then((result) => {
@@ -35,6 +38,11 @@ export function MyTasksCard() {
   }
 
   useEffect(loadTasks, [])
+
+  const visibleTasks = useMemo(
+    () => (tasks && statusFilter !== ALL_STATUSES ? tasks.filter((t) => t.status === statusFilter) : tasks),
+    [tasks, statusFilter]
+  )
 
   async function handleStatusChange(task: MyTask, status: string) {
     setUpdatingId(task.id)
@@ -56,18 +64,37 @@ export function MyTasksCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>My Tasks</CardTitle>
-        <CardDescription>Tasks assigned to you, across every project.</CardDescription>
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+        <div>
+          <CardTitle>My Tasks</CardTitle>
+          <CardDescription>Tasks assigned to you, across every project.</CardDescription>
+        </div>
+        {tasks && tasks.length > 0 && (
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 w-40 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_STATUSES}>All statuses</SelectItem>
+              {TASK_STATUS_ORDER.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {TASK_STATUS_LABEL[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </CardHeader>
       <CardContent>
         {!tasks ? (
           <Skeleton className="h-32 w-full" />
         ) : tasks.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">You&apos;re all caught up — no open tasks.</p>
+        ) : visibleTasks && visibleTasks.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No tasks with this status.</p>
         ) : (
-          <div className="flex flex-col divide-y">
-            {tasks.map((task) => (
+          <div className="flex max-h-96 flex-col divide-y overflow-y-auto">
+            {visibleTasks!.map((task) => (
               <div key={task.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: task.projectColor }} />
                 <div className="min-w-0 flex-1">
