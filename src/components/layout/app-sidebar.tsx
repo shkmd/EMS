@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Building2 } from "lucide-react"
+import { Building2, LifeBuoy } from "lucide-react"
 
 import {
   Sidebar,
@@ -108,6 +108,19 @@ export function AppSidebar({
           )
         })}
       </SidebarContent>
+      <div className="mx-2 mb-2 flex flex-col items-center gap-2 rounded-2xl bg-primary p-4 text-center text-primary-foreground group-data-[collapsible=icon]:hidden">
+        <div className="flex size-10 items-center justify-center rounded-full bg-white/15">
+          <LifeBuoy className="size-5" />
+        </div>
+        <p className="text-sm font-bold">Need help?</p>
+        <p className="text-xs leading-relaxed opacity-85">Reach the HR desk for payroll, leave or access issues.</p>
+        <Link
+          href="/messages"
+          className="mt-1 inline-flex h-9 w-full items-center justify-center rounded-lg bg-white text-xs font-bold text-primary"
+        >
+          Contact Support
+        </Link>
+      </div>
       <SidebarRail />
     </Sidebar>
   )

@@ -2,13 +2,14 @@ import { z } from "zod"
 
 export const WEEKDAY_VALUES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const
 
-export const FONT_FAMILY_VALUES = ["inter", "roboto", "poppins", "open-sans", "lato"] as const
+export const FONT_FAMILY_VALUES = ["inter", "roboto", "poppins", "open-sans", "lato", "plus-jakarta-sans"] as const
 export const FONT_FAMILY_LABELS: Record<(typeof FONT_FAMILY_VALUES)[number], string> = {
   inter: "Inter (default)",
   roboto: "Roboto",
   poppins: "Poppins",
   "open-sans": "Open Sans",
   lato: "Lato",
+  "plus-jakarta-sans": "Plus Jakarta Sans",
 }
 
 export const companySettingsSchema = z.object({

@@ -1,3 +1,7 @@
+"use client"
+
+import { usePathname } from "next/navigation"
+
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { PageBreadcrumb } from "@/components/layout/page-breadcrumb"
@@ -15,6 +19,9 @@ type TopbarProps = {
 }
 
 export function Topbar({ name, email, role, avatarUrl }: TopbarProps) {
+  const pathname = usePathname()
+  const isDashboard = pathname === "/dashboard"
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b bg-background px-4">
       <SidebarTrigger />
@@ -22,7 +29,7 @@ export function Topbar({ name, email, role, avatarUrl }: TopbarProps) {
       {/* min-w-0 lets this shrink/truncate instead of forcing the header
           (and page) to overflow horizontally on a long breadcrumb chain. */}
       <div className="min-w-0 overflow-hidden">
-        <PageBreadcrumb />
+        {isDashboard ? <p className="truncate text-sm font-bold">Welcome back, {name}</p> : <PageBreadcrumb />}
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <GlobalSearch role={role} />

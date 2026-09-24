@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
-import { Users, UserCheck, UserX, UserPlus, Building2, CalendarClock, Clock, Cake, PartyPopper } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { requireSession } from "@/features/auth/session";
 import { canManageEmployees } from "@/features/employees/authorization";
 import { canManageSubscriptions } from "@/features/subscriptions/authorization";
 import { getUpcomingSubscriptionRenewals } from "@/features/subscriptions/queries";
-import { UpcomingRenewalsCard } from "@/features/subscriptions/components/upcoming-renewals-card";
-import { StatCard } from "@/features/dashboard/components/stat-card";
-import { VerticalFilter } from "@/features/dashboard/components/vertical-filter";
+import { TodayBar } from "@/features/dashboard/components/today-bar";
+import { KpiCards } from "@/features/dashboard/components/kpi-cards";
 import { EmployeeGrowthChart } from "@/features/dashboard/components/employee-growth-chart";
 import { DepartmentChart } from "@/features/dashboard/components/department-chart";
-import { AttendanceChart } from "@/features/dashboard/components/attendance-chart";
-import { LeaveChart } from "@/features/dashboard/components/leave-chart";
-import { CelebrationsCard } from "@/features/dashboard/components/celebrations-card";
-import { TodayCard } from "@/features/attendance/components/today-card";
+import { AttendanceDonutChart } from "@/features/dashboard/components/attendance-donut-chart";
+import { LeaveSummaryCard } from "@/features/dashboard/components/leave-summary-card";
+import { UpcomingEventsCard } from "@/features/dashboard/components/upcoming-events-card";
+import { QuickAccessCard } from "@/features/dashboard/components/quick-access-card";
 import { getTodayAttendance } from "@/features/attendance/queries";
 import { MyTasksCard } from "@/features/projects/components/my-tasks-card";
 import { DailyLogCard } from "@/features/daily-log/components/daily-log-card";
@@ -80,105 +77,54 @@ export default async function DashboardPage({
   ]);
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Company-wide overview.</p>
-        </div>
-        {canSwitchVertical && verticals.length > 0 && <VerticalFilter verticals={verticals} />}
-        {!canSwitchVertical && verticalId && (
-          <Badge variant="secondary">Showing: {verticals.find((v) => v.id === verticalId)?.name}</Badge>
-        )}
+    <div className="flex flex-1 flex-col gap-4">
+      <TodayBar
+        showAttendance={!!session.employeeId}
+        initial={
+          todayAttendance
+            ? {
+                id: todayAttendance.id,
+                status: todayAttendance.status,
+                checkIn: todayAttendance.checkIn?.toISOString() ?? null,
+                checkOut: todayAttendance.checkOut?.toISOString() ?? null,
+                workingMinutes: todayAttendance.workingMinutes,
+                breakMinutes: todayAttendance.breakMinutes,
+                breaks: todayAttendance.breaks.map((b) => ({
+                  id: b.id,
+                  breakStart: b.breakStart.toISOString(),
+                  breakEnd: b.breakEnd?.toISOString() ?? null,
+                })),
+              }
+            : null
+        }
+        verticals={verticals}
+        canSwitchVertical={canSwitchVertical}
+        verticalName={verticalId ? verticals.find((v) => v.id === verticalId)?.name : undefined}
+      />
+
+      <KpiCards employeeStats={employeeStats} attendanceToday={attendanceToday} pendingLeaveRequests={pendingLeaveRequests} />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <AttendanceDonutChart data={attendanceStats} />
+        <EmployeeGrowthChart data={employeeGrowth} />
+        <UpcomingEventsCard birthdays={birthdays} anniversaries={anniversaries} renewals={canSeeSubscriptions ? upcomingRenewals : []} />
       </div>
 
-      {session.employeeId && (
-        <TodayCard
-          initial={
-            todayAttendance
-              ? {
-                  id: todayAttendance.id,
-                  status: todayAttendance.status,
-                  checkIn: todayAttendance.checkIn?.toISOString() ?? null,
-                  checkOut: todayAttendance.checkOut?.toISOString() ?? null,
-                  workingMinutes: todayAttendance.workingMinutes,
-                  breakMinutes: todayAttendance.breakMinutes,
-                  breaks: todayAttendance.breaks.map((b) => ({
-                    id: b.id,
-                    breakStart: b.breakStart.toISOString(),
-                    breakEnd: b.breakEnd?.toISOString() ?? null,
-                  })),
-                }
-              : null
-          }
-        />
-      )}
-
-      {session.employeeId && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {session.employeeId ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr_1fr]">
           <MyTasksCard />
           <DailyLogCard />
+          <QuickAccessCard canAddEmployee={canSwitchVertical} />
         </div>
+      ) : (
+        <QuickAccessCard canAddEmployee={canSwitchVertical} />
       )}
 
-      <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 xl:grid-cols-5">
-        <StatCard label="Total Employees" value={employeeStats.total} icon={Users} href="/employees" />
-        <StatCard
-          label="Active"
-          value={employeeStats.active}
-          icon={UserCheck}
-          accent="success"
-          href="/employees?status=ACTIVE"
-        />
-        <StatCard
-          label="Inactive"
-          value={employeeStats.inactive}
-          icon={UserX}
-          accent="destructive"
-          href="/employees?status=INACTIVE"
-        />
-        <StatCard
-          label="New This Month"
-          value={employeeStats.newThisMonth}
-          icon={UserPlus}
-          accent="warning"
-          href="/employees?sortBy=dateOfJoining&sortOrder=desc"
-        />
-        <StatCard label="Departments" value={employeeStats.departmentCount} icon={Building2} href="/departments" />
-        <StatCard
-          label="Pending Leave Requests"
-          value={pendingLeaveRequests}
-          icon={CalendarClock}
-          accent="warning"
-          href="/leave?tab=approvals"
-        />
-        <StatCard
-          label="Attendance Today"
-          value={`${attendanceToday.present} / ${attendanceToday.totalActive}`}
-          icon={Clock}
-          accent="success"
-          href="/attendance?tab=team"
-        />
-        <StatCard label="Birthdays This Month" value={birthdays.length} icon={Cake} accent="info" href="#celebrations" />
-        <StatCard
-          label="Work Anniversaries"
-          value={anniversaries.length}
-          icon={PartyPopper}
-          accent="violet"
-          href="#celebrations"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <EmployeeGrowthChart data={employeeGrowth} />
-        <DepartmentChart data={departmentCounts} />
-        <AttendanceChart data={attendanceStats} />
-        <LeaveChart data={leaveStats} />
-      </div>
-
-      <div id="celebrations" className={canSeeSubscriptions ? "grid scroll-mt-20 grid-cols-1 gap-6 lg:grid-cols-2" : "scroll-mt-20"}>
-        <CelebrationsCard birthdays={birthdays} anniversaries={anniversaries} />
-        {canSeeSubscriptions && <UpcomingRenewalsCard renewals={upcomingRenewals} />}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <DepartmentChart data={departmentCounts} />
+        </div>
+        <LeaveSummaryCard data={leaveStats} />
       </div>
     </div>
   );

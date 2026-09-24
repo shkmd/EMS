@@ -150,7 +150,7 @@ export async function getAttendanceStatistics(daysBack = 14, verticalId?: string
   })
 
   return grouped
-    .map((g) => ({ status: ATTENDANCE_STATUS_LABELS[g.status] ?? g.status, count: g._count._all }))
+    .map((g) => ({ status: ATTENDANCE_STATUS_LABELS[g.status] ?? g.status, statusCode: g.status, count: g._count._all }))
     .sort((a, b) => b.count - a.count)
 }
 

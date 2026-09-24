@@ -38,6 +38,8 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -58,14 +60,16 @@
   --popover-foreground: oklch(0.22 0.015 265);
   --primary: oklch(0.56 0.2 262);
   --primary-foreground: oklch(0.99 0.003 262);
+  --primary-soft: #F6ECEA;
+  --primary-soft-foreground: #6E2C28;
   --secondary: oklch(0.96 0.008 265);
   --secondary-foreground: oklch(0.3 0.02 265);
   --muted: oklch(0.96 0.008 265);
-  --muted-foreground: oklch(0.54 0.02 265);
+  --muted-foreground: #6E6770;
   --accent: oklch(0.93 0.03 262);
   --accent-foreground: oklch(0.4 0.15 262);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.008 265);
+  --border: #ECE6E9;
   --input: oklch(0.92 0.008 265);
   --ring: oklch(0.62 0.19 262);
   /* Categorical palette (validated: dataviz skill references/palette.md) */
@@ -77,7 +81,7 @@
   --chart-6: #008300; /* green */
   --chart-7: #4a3aa7; /* violet */
   --chart-8: #e34948; /* red */
-  --radius: 0.875rem;
+  --radius: 1rem;
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.22 0.015 265);
   --sidebar-primary: oklch(0.56 0.2 262);
@@ -86,7 +90,7 @@
   --sidebar-accent-foreground: oklch(0.28 0.02 265);
   --sidebar-border: oklch(0.93 0.008 265);
   --sidebar-ring: oklch(0.62 0.19 262);
-  --background: oklch(0.97 0.009 265);
+  --background: #F4F1F3;
   --foreground: oklch(0.22 0.015 265);
 }
 
@@ -99,6 +103,8 @@
   --popover-foreground: oklch(0.97 0.004 265);
   --primary: oklch(0.68 0.18 262);
   --primary-foreground: oklch(0.16 0.03 262);
+  --primary-soft: oklch(0.32 0.07 262);
+  --primary-soft-foreground: oklch(0.88 0.06 262);
   --secondary: oklch(0.28 0.014 265);
   --secondary-foreground: oklch(0.97 0.004 265);
   --muted: oklch(0.28 0.014 265);
